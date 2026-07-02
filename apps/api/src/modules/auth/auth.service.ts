@@ -8,9 +8,9 @@ import { UsersService } from '@/modules/users/users.service';
 
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { AuthResult } from './interfaces/auth-result.interface';
+import { IssuedTokens } from './interfaces/issued-tokens.interface';
 import { RefreshTokenRepository } from './refresh-token.repository';
-import { AuthResponse } from './response/auth.response';
-import { TokenResponse } from './response/token.response';
 import { TokenService } from './token.service';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class AuthService {
     private readonly refreshTokenRepository: RefreshTokenRepository,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
+  async register(dto: RegisterDto): Promise<AuthResult> {
     const passwordHash = await argon2.hash(dto.password);
     const user = await this.usersService.createUser({
       email: dto.email,
@@ -30,10 +30,10 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user.id, randomUUID());
-    return AuthResponse.from(tokens, user);
+    return { tokens, user };
   }
 
-  async login(dto: LoginDto): Promise<AuthResponse> {
+  async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user || !(await argon2.verify(user.passwordHash, dto.password))) {
@@ -41,10 +41,10 @@ export class AuthService {
     }
 
     const tokens = await this.issueTokens(user.id, randomUUID());
-    return AuthResponse.from(tokens, user);
+    return { tokens, user };
   }
 
-  async refresh(refreshToken: string): Promise<TokenResponse> {
+  async refresh(refreshToken: string): Promise<IssuedTokens> {
     const tokenHash = this.tokenService.hashToken(refreshToken);
     const stored = await this.refreshTokenRepository.findByTokenHash(tokenHash);
 
@@ -83,18 +83,24 @@ export class AuthService {
     await this.refreshTokenRepository.revokeFamily(stored.familyId);
   }
 
-  private async issueTokens(userId: string, familyId: string): Promise<TokenResponse> {
+  private async issueTokens(userId: string, familyId: string): Promise<IssuedTokens> {
     const accessToken = this.tokenService.signAccessToken(userId);
     const refreshToken = this.tokenService.signRefreshToken(userId);
-    const { exp } = this.tokenService.verifyRefreshToken(refreshToken);
+    const { exp: accessExp } = this.tokenService.verifyAccessToken(accessToken);
+    const { exp: refreshExp } = this.tokenService.verifyRefreshToken(refreshToken);
 
     await this.refreshTokenRepository.create({
       userId,
       familyId,
       tokenHash: this.tokenService.hashToken(refreshToken),
-      expiresAt: new Date(exp! * 1000),
+      expiresAt: new Date(refreshExp! * 1000),
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: new Date(accessExp! * 1000),
+      refreshTokenExpiresAt: new Date(refreshExp! * 1000),
+    };
   }
 }

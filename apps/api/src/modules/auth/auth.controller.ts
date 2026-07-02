@@ -1,11 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponse } from './response/auth.response';
-import { TokenResponse } from './response/token.response';
+import { SuccessResponse } from './response/success.response';
+import { clearAuthCookies, getRefreshTokenCookie, setAuthCookies } from './utils/auth-cookie.util';
 
 @Controller('auth')
 export class AuthController {
@@ -13,26 +14,47 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  register(@Body() dto: RegisterDto): Promise<AuthResponse> {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponse> {
+    const { tokens, user } = await this.authService.register(dto);
+    setAuthCookies(response, tokens);
+    return AuthResponse.from(user);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto): Promise<AuthResponse> {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponse> {
+    const { tokens, user } = await this.authService.login(dto);
+    setAuthCookies(response, tokens);
+    return AuthResponse.from(user);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refresh(@Body() dto: RefreshDto): Promise<TokenResponse> {
-    return this.authService.refresh(dto.refreshToken);
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SuccessResponse> {
+    const refreshToken = getRefreshTokenCookie(request);
+    const tokens = await this.authService.refresh(refreshToken);
+    setAuthCookies(response, tokens);
+    return new SuccessResponse();
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Body() dto: RefreshDto): Promise<{ success: true }> {
-    await this.authService.logout(dto.refreshToken);
-    return { success: true };
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SuccessResponse> {
+    const refreshToken = getRefreshTokenCookie(request);
+    await this.authService.logout(refreshToken);
+    clearAuthCookies(response);
+    return new SuccessResponse();
   }
 }
