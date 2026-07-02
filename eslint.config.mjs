@@ -138,6 +138,7 @@ export default [
       '**/.next/**',
       '**/coverage/**',
       '**/prisma/migrations/**',
+      '**/src/generated/**',
       '*.config.js',
       '*.config.ts',
       '*.config.mjs',
