@@ -9,9 +9,7 @@ import { LoggerModule } from '@/common/logger/logger.module';
 import { Neo4jModule } from '@/infrastructure/neo4j/neo4j.module';
 import { PrismaModule } from '@/infrastructure/prisma/prisma.module';
 import { RedisModule } from '@/infrastructure/redis/redis.module';
-
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AuthModule } from '@/modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -20,8 +18,9 @@ import { AppService } from './app.service';
     PrismaModule,
     RedisModule,
     Neo4jModule,
+    AuthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, { provide: APP_FILTER, useClass: AllExceptionsFilter }],
+  controllers: [],
+  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}
