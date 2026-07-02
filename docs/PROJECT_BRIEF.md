@@ -33,10 +33,6 @@ skill, it does not go in.
     user's social network, powered by Neo4j queries
 13. Media uploads via S3 presigned URLs with automatic thumbnails
 
-## Architecture overview
-Single-service backend (NestJS monolith) — deliberate choice, not
-microservices this time. MiniBank proves microservices; Threads-clone proves
-product execution.
 
 - **Backend:** NestJS monolith, deployed as one service
 - **Frontend:** Next.js 15 App Router, deployed to Vercel
@@ -72,8 +68,7 @@ durably to Postgres in the same transaction as the triggering event,
 then enqueue a BullMQ job for delivery. Workers are idempotent and
 retried with exponential backoff. A periodic sweep re-enqueues any
 records stuck in PENDING state. Postgres is the source of truth; the
-queue is the fast path. Same reliability guarantees as MiniBank's outbox
-pattern, simplified for a single-process context.
+queue is the fast path.
 
 ### 3. Real-time updates without breaking scale
 Socket.io with Redis adapter allows horizontal scaling of the socket
@@ -112,7 +107,7 @@ filters and drill-downs.
 - GitHub Actions for CI
 - Railway + Vercel for deployment
 
-## Quality standards (same bar as MiniBank)
+## Quality standards
 - ESLint + Prettier + Husky pre-commit hooks
 - TypeScript strict mode, no `any` without justification comment
 - Unit tests on business logic, integration tests on critical paths,
