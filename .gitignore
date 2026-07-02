@@ -6,6 +6,8 @@ out/
 coverage/
 *.tsbuildinfo
 
+**/src/generated/
+
 .env
 .env.local
 .env.*.local
