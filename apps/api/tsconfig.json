@@ -17,6 +17,7 @@
       "@/*": ["./src/*"],
       "*": ["./*"]
     },
+    "types": ["node", "jest"],
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
