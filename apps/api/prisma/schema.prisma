@@ -37,10 +37,36 @@ model Post {
 
   likes    Like[]
   hashtags PostHashtag[]
+  media    Media[]
 
   @@index([authorId])
   @@index([parentId])
   @@map("posts")
+}
+
+enum MediaProcessingStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Media {
+  id               String                @id @default(uuid())
+  postId           String                @map("post_id")
+  post             Post                  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  s3Key            String                @map("s3_key")
+  url              String
+  thumbnailUrl     String?               @map("thumbnail_url")
+  width            Int?
+  height           Int?
+  order            Int
+  processingStatus MediaProcessingStatus @default(QUEUED) @map("processing_status")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  @@index([postId])
+  @@map("media")
 }
 
 model Like {
