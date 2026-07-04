@@ -1,9 +1,11 @@
-import { Hashtag, Post, PostHashtag, User } from '@/generated/prisma';
+import { Hashtag, Media, Post, PostHashtag, User } from '@/generated/prisma';
+import { MediaResponse } from '@/modules/media/response/media.response';
 import { UserResponse } from '@/modules/users/response/user.response';
 
 export type PostWithRelations = Post & {
   author: User;
   hashtags: (PostHashtag & { hashtag: Hashtag })[];
+  media: Media[];
 };
 
 export class PostResponse {
@@ -14,6 +16,7 @@ export class PostResponse {
   depth!: number;
   likeCount!: number;
   hashtags!: string[];
+  media!: MediaResponse[];
   createdAt!: Date;
   updatedAt!: Date;
 
@@ -26,6 +29,7 @@ export class PostResponse {
       depth: post.depth,
       likeCount,
       hashtags: post.hashtags.map((h) => h.hashtag.tag),
+      media: post.media.map((m) => MediaResponse.from(m)),
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
     };

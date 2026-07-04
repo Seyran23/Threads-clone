@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 
+import { ForbiddenException } from '@/common/exceptions/app.exception';
 import { S3Service } from '@/infrastructure/s3/s3.service';
 
 import { EXTENSION_BY_CONTENT_TYPE, PRESIGN_EXPIRY_SECONDS } from './constants/media.constants';
@@ -11,6 +12,17 @@ import { PresignedUploadResponse } from './response/presigned-upload.response';
 @Injectable()
 export class MediaService {
   constructor(private readonly s3Service: S3Service) {}
+
+  getPublicUrl(s3Key: string): string {
+    return this.s3Service.getPublicUrl(s3Key);
+  }
+
+  assertOwnedByUser(userId: string, s3Keys: string[]): void {
+    const unauthorized = s3Keys.some((key) => !key.startsWith(`media/${userId}/`));
+    if (unauthorized) {
+      throw new ForbiddenException('One or more media keys do not belong to this user');
+    }
+  }
 
   async createPresignedUpload(
     userId: string,

@@ -3,13 +3,15 @@ import { Injectable } from '@nestjs/common';
 import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
+import { MediaRepository } from '@/modules/media/media.repository';
+import { MediaService } from '@/modules/media/media.service';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
 import { PostsRepository } from './posts.repository';
 import { LikeResponse } from './response/like.response';
-import { PostResponse } from './response/post.response';
+import { PostResponse, PostWithRelations } from './response/post.response';
 import { extractHashtags } from './utils/hashtag.util';
 
 @Injectable()
@@ -19,10 +21,14 @@ export class PostsService {
     private readonly postsRepository: PostsRepository,
     private readonly hashtagsRepository: HashtagsRepository,
     private readonly likesRepository: LikesRepository,
+    private readonly mediaService: MediaService,
+    private readonly mediaRepository: MediaRepository,
   ) {}
 
   async createPost(authorId: string, dto: CreatePostDto): Promise<PostResponse> {
     const hashtagIds = await this.resolveHashtagIds(this.prisma, dto.content);
+    const mediaKeys = dto.mediaKeys ?? [];
+    this.mediaService.assertOwnedByUser(authorId, mediaKeys);
 
     const post = await this.prisma.$transaction(async (tx) => {
       const created = await this.postsRepository.create(tx, {
@@ -32,7 +38,8 @@ export class PostsService {
         hashtagIds,
       });
       await this.likesRepository.initializeCount(created.id);
-      return created;
+      await this.attachMedia(tx, created.id, mediaKeys);
+      return this.refetchWithMedia(tx, created.id);
     });
 
     return PostResponse.from(post, 0);
@@ -45,6 +52,8 @@ export class PostsService {
     }
 
     const hashtagIds = await this.resolveHashtagIds(this.prisma, dto.content);
+    const mediaKeys = dto.mediaKeys ?? [];
+    this.mediaService.assertOwnedByUser(authorId, mediaKeys);
 
     const post = await this.prisma.$transaction(async (tx) => {
       const created = await this.postsRepository.create(tx, {
@@ -55,7 +64,8 @@ export class PostsService {
         hashtagIds,
       });
       await this.likesRepository.initializeCount(created.id);
-      return created;
+      await this.attachMedia(tx, created.id, mediaKeys);
+      return this.refetchWithMedia(tx, created.id);
     });
 
     return PostResponse.from(post, 0);
@@ -110,5 +120,25 @@ export class PostsService {
     const hashtags = await this.hashtagsRepository.findOrCreateMany(tx, tags);
 
     return hashtags.map((hashtag) => hashtag.id);
+  }
+
+  private async attachMedia(
+    tx: PrismaClientOrTx,
+    postId: string,
+    mediaKeys: string[],
+  ): Promise<void> {
+    for (const [index, s3Key] of mediaKeys.entries()) {
+      await this.mediaRepository.create(tx, {
+        postId,
+        s3Key,
+        url: this.mediaService.getPublicUrl(s3Key),
+        order: index,
+      });
+    }
+  }
+
+  private async refetchWithMedia(tx: PrismaClientOrTx, postId: string): Promise<PostWithRelations> {
+    const post = await this.postsRepository.findById(tx, postId);
+    return post!;
   }
 }

@@ -8,6 +8,7 @@ import { PostWithRelations } from './response/post.response';
 const POST_INCLUDE = {
   author: true,
   hashtags: { include: { hashtag: true } },
+  media: { orderBy: { order: 'asc' } },
 } as const;
 
 @Injectable()
