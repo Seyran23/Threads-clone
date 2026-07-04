@@ -20,6 +20,13 @@ const envSchema = z.object({
   JWT_ACCESS_PUBLIC_KEY: z.string().min(1),
   JWT_REFRESH_PRIVATE_KEY: z.string().min(1),
   JWT_REFRESH_PUBLIC_KEY: z.string().min(1),
+
+  S3_ENDPOINT: z.string().url(),
+  S3_PUBLIC_URL: z.string().url(),
+  S3_REGION: z.string().min(1),
+  S3_ACCESS_KEY: z.string().min(1),
+  S3_ACCESS_SECRET: z.string().min(1),
+  S3_BUCKET: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;
