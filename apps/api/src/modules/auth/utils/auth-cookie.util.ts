@@ -1,11 +1,9 @@
 import type { Request, Response } from 'express';
 
 import { UnauthorizedException } from '@/common/exceptions/app.exception';
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/common/token/token-cookie.constants';
 
 import { IssuedTokens } from '../interfaces/issued-tokens.interface';
-
-export const ACCESS_TOKEN_COOKIE = 'access_token';
-export const REFRESH_TOKEN_COOKIE = 'refresh_token';
 
 const isProd = process.env.NODE_ENV === 'production';
 

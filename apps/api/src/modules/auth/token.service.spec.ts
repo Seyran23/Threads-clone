@@ -13,13 +13,17 @@ function generateRsaKeyPair(): { privateKey: string; publicKey: string } {
 }
 
 describe('TokenService', () => {
+  let jwtService: JwtService;
   let tokenService: TokenService;
+  let access: { privateKey: string; publicKey: string };
+  let refresh: { privateKey: string; publicKey: string };
 
   beforeEach(() => {
-    const access = generateRsaKeyPair();
-    const refresh = generateRsaKeyPair();
+    jwtService = new JwtService();
+    access = generateRsaKeyPair();
+    refresh = generateRsaKeyPair();
 
-    tokenService = new TokenService(new JwtService(), {
+    tokenService = new TokenService(jwtService, {
       accessPrivateKey: access.privateKey,
       accessPublicKey: access.publicKey,
       accessTtl: '15m',
@@ -27,14 +31,6 @@ describe('TokenService', () => {
       refreshPublicKey: refresh.publicKey,
       refreshTtl: '30d',
     });
-  });
-
-  it('signs and verifies an access token round-trip', () => {
-    const token = tokenService.signAccessToken('user-1');
-
-    const payload = tokenService.verifyAccessToken(token);
-
-    expect(payload.sub).toBe('user-1');
   });
 
   it('signs and verifies a refresh token round-trip', () => {
@@ -45,16 +41,13 @@ describe('TokenService', () => {
     expect(payload.sub).toBe('user-1');
   });
 
-  it('rejects an access token verified against the refresh keypair', () => {
-    const token = tokenService.signAccessToken('user-1');
+  it('rejects a token signed with the access keypair', () => {
+    const foreignToken = jwtService.sign(
+      { sub: 'user-1' },
+      { privateKey: access.privateKey, algorithm: 'RS256' },
+    );
 
-    expect(() => tokenService.verifyRefreshToken(token)).toThrow();
-  });
-
-  it('rejects a refresh token verified against the access keypair', () => {
-    const token = tokenService.signRefreshToken('user-1');
-
-    expect(() => tokenService.verifyAccessToken(token)).toThrow();
+    expect(() => tokenService.verifyRefreshToken(foreignToken)).toThrow();
   });
 
   it('produces distinct tokens for the same user signed back to back', () => {
@@ -66,17 +59,9 @@ describe('TokenService', () => {
   });
 
   it('hashes the same token to the same value every time', () => {
-    const token = tokenService.signAccessToken('user-1');
+    const token = tokenService.signRefreshToken('user-1');
 
     expect(tokenService.hashToken(token)).toBe(tokenService.hashToken(token));
-  });
-
-  it('sets exp exactly accessTtl seconds after iat', () => {
-    const token = tokenService.signAccessToken('user-1');
-
-    const { iat, exp } = tokenService.verifyAccessToken(token);
-
-    expect(exp! - iat!).toBe(15 * 60);
   });
 
   it('sets exp exactly refreshTtl seconds after iat', () => {

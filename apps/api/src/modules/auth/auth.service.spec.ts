@@ -1,6 +1,7 @@
 import * as argon2 from 'argon2';
 
 import { UnauthorizedException } from '@/common/exceptions/app.exception';
+import { AccessTokenService } from '@/common/token/access-token.service';
 import { UsersService } from '@/modules/users/users.service';
 
 import { AuthService } from './auth.service';
@@ -12,6 +13,7 @@ jest.mock('argon2');
 describe('AuthService', () => {
   let authService: AuthService;
   let usersService: jest.Mocked<UsersService>;
+  let accessTokenService: jest.Mocked<AccessTokenService>;
   let tokenService: jest.Mocked<TokenService>;
   let refreshTokenRepository: jest.Mocked<RefreshTokenRepository>;
 
@@ -31,10 +33,13 @@ describe('AuthService', () => {
       findById: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
+    accessTokenService = {
+      sign: jest.fn(),
+      verify: jest.fn(),
+    } as unknown as jest.Mocked<AccessTokenService>;
+
     tokenService = {
-      signAccessToken: jest.fn(),
       signRefreshToken: jest.fn(),
-      verifyAccessToken: jest.fn(),
       verifyRefreshToken: jest.fn(),
       hashToken: jest.fn(),
     } as unknown as jest.Mocked<TokenService>;
@@ -46,11 +51,16 @@ describe('AuthService', () => {
       revokeFamily: jest.fn(),
     } as unknown as jest.Mocked<RefreshTokenRepository>;
 
-    authService = new AuthService(usersService, tokenService, refreshTokenRepository);
+    authService = new AuthService(
+      usersService,
+      accessTokenService,
+      tokenService,
+      refreshTokenRepository,
+    );
 
-    tokenService.signAccessToken.mockReturnValue('access-token');
+    accessTokenService.sign.mockReturnValue('access-token');
+    accessTokenService.verify.mockReturnValue({ sub: user.id, jti: 'jti-a', exp: 1000 });
     tokenService.signRefreshToken.mockReturnValue('refresh-token');
-    tokenService.verifyAccessToken.mockReturnValue({ sub: user.id, jti: 'jti-a', exp: 1000 });
     tokenService.verifyRefreshToken.mockReturnValue({ sub: user.id, jti: 'jti-r', exp: 2000 });
     tokenService.hashToken.mockReturnValue('hashed-refresh-token');
     refreshTokenRepository.create.mockResolvedValue({} as never);

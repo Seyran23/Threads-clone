@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import * as argon2 from 'argon2';
 
 import { UnauthorizedException } from '@/common/exceptions/app.exception';
+import { AccessTokenService } from '@/common/token/access-token.service';
 import { UsersService } from '@/modules/users/users.service';
 
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +18,7 @@ import { TokenService } from './token.service';
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly accessTokenService: AccessTokenService,
     private readonly tokenService: TokenService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
   ) {}
@@ -84,9 +86,9 @@ export class AuthService {
   }
 
   private async issueTokens(userId: string, familyId: string): Promise<IssuedTokens> {
-    const accessToken = this.tokenService.signAccessToken(userId);
+    const accessToken = this.accessTokenService.sign(userId);
     const refreshToken = this.tokenService.signRefreshToken(userId);
-    const { exp: accessExp } = this.tokenService.verifyAccessToken(accessToken);
+    const { exp: accessExp } = this.accessTokenService.verify(accessToken);
     const { exp: refreshExp } = this.tokenService.verifyRefreshToken(refreshToken);
 
     await this.refreshTokenRepository.create({
