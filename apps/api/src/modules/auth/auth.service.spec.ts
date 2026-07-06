@@ -1,4 +1,5 @@
 import * as argon2 from 'argon2';
+import { PinoLogger } from 'nestjs-pino';
 
 import { UnauthorizedException } from '@/common/exceptions/app.exception';
 import { AccessTokenService } from '@/common/token/access-token.service';
@@ -16,6 +17,7 @@ describe('AuthService', () => {
   let accessTokenService: jest.Mocked<AccessTokenService>;
   let tokenService: jest.Mocked<TokenService>;
   let refreshTokenRepository: jest.Mocked<RefreshTokenRepository>;
+  let logger: jest.Mocked<PinoLogger>;
 
   const user = {
     id: 'user-1',
@@ -51,11 +53,19 @@ describe('AuthService', () => {
       revokeFamily: jest.fn(),
     } as unknown as jest.Mocked<RefreshTokenRepository>;
 
+    logger = {
+      setContext: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as unknown as jest.Mocked<PinoLogger>;
+
     authService = new AuthService(
       usersService,
       accessTokenService,
       tokenService,
       refreshTokenRepository,
+      logger,
     );
 
     accessTokenService.sign.mockReturnValue('access-token');

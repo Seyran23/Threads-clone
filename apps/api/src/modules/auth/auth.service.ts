@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { PinoLogger } from 'nestjs-pino';
 
 import { UnauthorizedException } from '@/common/exceptions/app.exception';
 import { AccessTokenService } from '@/common/token/access-token.service';
@@ -21,7 +22,10 @@ export class AuthService {
     private readonly accessTokenService: AccessTokenService,
     private readonly tokenService: TokenService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
-  ) {}
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(AuthService.name);
+  }
 
   async register(dto: RegisterDto): Promise<AuthResult> {
     const passwordHash = await argon2.hash(dto.password);
@@ -32,6 +36,7 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user.id, randomUUID());
+    this.logger.info({ userId: user.id }, 'User registered');
     return { tokens, user };
   }
 
@@ -39,10 +44,12 @@ export class AuthService {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user || !(await argon2.verify(user.passwordHash, dto.password))) {
+      this.logger.warn({ email: dto.email }, 'Login failed: invalid credentials');
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const tokens = await this.issueTokens(user.id, randomUUID());
+    this.logger.info({ userId: user.id }, 'User logged in');
     return { tokens, user };
   }
 
@@ -56,6 +63,10 @@ export class AuthService {
 
     if (stored.used || stored.revoked) {
       await this.refreshTokenRepository.revokeFamily(stored.familyId);
+      this.logger.warn(
+        { userId: stored.userId, familyId: stored.familyId },
+        'Refresh token reuse detected; session revoked',
+      );
       throw new UnauthorizedException('Refresh token reuse detected; session revoked');
     }
 
@@ -70,6 +81,7 @@ export class AuthService {
     }
 
     await this.refreshTokenRepository.markUsed(stored.id);
+    this.logger.info({ userId: stored.userId, familyId: stored.familyId }, 'Token refreshed');
 
     return this.issueTokens(stored.userId, stored.familyId);
   }
@@ -83,6 +95,7 @@ export class AuthService {
     }
 
     await this.refreshTokenRepository.revokeFamily(stored.familyId);
+    this.logger.info({ userId: stored.userId, familyId: stored.familyId }, 'User logged out');
   }
 
   private async issueTokens(userId: string, familyId: string): Promise<IssuedTokens> {

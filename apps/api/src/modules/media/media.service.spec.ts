@@ -1,3 +1,5 @@
+import { PinoLogger } from 'nestjs-pino';
+
 import { ForbiddenException } from '@/common/exceptions/app.exception';
 import { S3Service } from '@/infrastructure/s3/s3.service';
 
@@ -7,6 +9,7 @@ import { MediaService } from './media.service';
 describe('MediaService', () => {
   let mediaService: MediaService;
   let s3Service: jest.Mocked<S3Service>;
+  let logger: jest.Mocked<PinoLogger>;
 
   const dto: PresignUploadDto = {
     filename: 'photo.jpg',
@@ -20,7 +23,14 @@ describe('MediaService', () => {
       getPublicUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
-    mediaService = new MediaService(s3Service);
+    logger = {
+      setContext: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as unknown as jest.Mocked<PinoLogger>;
+
+    mediaService = new MediaService(s3Service, logger);
 
     s3Service.createPresignedUploadUrl.mockResolvedValue('https://signed-upload-url');
     s3Service.getPublicUrl.mockImplementation((key) => `https://public/${key}`);
