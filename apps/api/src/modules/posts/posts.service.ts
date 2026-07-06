@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 
 import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
+import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { HashtagsRepository } from './hashtags.repository';
@@ -23,7 +25,11 @@ export class PostsService {
     private readonly likesRepository: LikesRepository,
     private readonly mediaService: MediaService,
     private readonly mediaRepository: MediaRepository,
-  ) {}
+    private readonly imageProcessingQueue: ImageProcessingQueue,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(PostsService.name);
+  }
 
   async createPost(authorId: string, dto: CreatePostDto): Promise<PostResponse> {
     const hashtagIds = await this.resolveHashtagIds(this.prisma, dto.content);
@@ -41,6 +47,8 @@ export class PostsService {
       await this.attachMedia(tx, created.id, mediaKeys);
       return this.refetchWithMedia(tx, created.id);
     });
+    await this.enqueueMediaProcessing(post.media);
+    this.logger.info({ postId: post.id, authorId, mediaCount: post.media.length }, 'Post created');
 
     return PostResponse.from(post, 0);
   }
@@ -67,6 +75,11 @@ export class PostsService {
       await this.attachMedia(tx, created.id, mediaKeys);
       return this.refetchWithMedia(tx, created.id);
     });
+    await this.enqueueMediaProcessing(post.media);
+    this.logger.info(
+      { postId: post.id, parentId, authorId, mediaCount: post.media.length },
+      'Reply created',
+    );
 
     return PostResponse.from(post, 0);
   }
@@ -96,6 +109,7 @@ export class PostsService {
     await this.likesRepository.increment(postId);
 
     const likeCount = await this.likesRepository.getCount(this.prisma, postId);
+    this.logger.info({ postId, userId }, 'Post liked');
     return { liked: true, likeCount };
   }
 
@@ -104,6 +118,7 @@ export class PostsService {
     if (existing) {
       await this.likesRepository.delete(this.prisma, userId, postId);
       await this.likesRepository.decrement(postId);
+      this.logger.info({ postId, userId }, 'Post unliked');
     }
 
     const likeCount = await this.likesRepository.getCount(this.prisma, postId);
@@ -140,5 +155,11 @@ export class PostsService {
   private async refetchWithMedia(tx: PrismaClientOrTx, postId: string): Promise<PostWithRelations> {
     const post = await this.postsRepository.findById(tx, postId);
     return post!;
+  }
+
+  private async enqueueMediaProcessing(media: { id: string }[]): Promise<void> {
+    for (const item of media) {
+      await this.imageProcessingQueue.enqueueThumbnailJob(item.id);
+    }
   }
 }

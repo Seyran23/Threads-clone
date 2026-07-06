@@ -10,6 +10,7 @@ import { LoggerModule } from '@/common/logger/logger.module';
 import { TokenModule } from '@/common/token/token.module';
 import { Neo4jModule } from '@/infrastructure/neo4j/neo4j.module';
 import { PrismaModule } from '@/infrastructure/prisma/prisma.module';
+import { BullMqModule } from '@/infrastructure/queue/bullmq.module';
 import { RedisModule } from '@/infrastructure/redis/redis.module';
 import { S3Module } from '@/infrastructure/s3/s3.module';
 import { AuthModule } from '@/modules/auth/auth.module';
@@ -25,6 +26,7 @@ import { PostsModule } from '@/modules/posts/posts.module';
     RedisModule,
     Neo4jModule,
     S3Module,
+    BullMqModule,
     AuthModule,
     MediaModule,
     PostsModule,

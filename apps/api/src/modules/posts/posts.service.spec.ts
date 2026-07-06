@@ -1,7 +1,10 @@
+import { PinoLogger } from 'nestjs-pino';
+
 import { ForbiddenException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
+import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
 
 import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
@@ -16,6 +19,8 @@ describe('PostsService', () => {
   let likesRepository: jest.Mocked<LikesRepository>;
   let mediaService: jest.Mocked<MediaService>;
   let mediaRepository: jest.Mocked<MediaRepository>;
+  let imageProcessingQueue: jest.Mocked<ImageProcessingQueue>;
+  let logger: jest.Mocked<PinoLogger>;
 
   const tx = {} as never;
 
@@ -88,6 +93,17 @@ describe('PostsService', () => {
       create: jest.fn(),
     } as unknown as jest.Mocked<MediaRepository>;
 
+    imageProcessingQueue = {
+      enqueueThumbnailJob: jest.fn(),
+    } as unknown as jest.Mocked<ImageProcessingQueue>;
+
+    logger = {
+      setContext: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as unknown as jest.Mocked<PinoLogger>;
+
     postsService = new PostsService(
       prisma,
       postsRepository,
@@ -95,6 +111,8 @@ describe('PostsService', () => {
       likesRepository,
       mediaService,
       mediaRepository,
+      imageProcessingQueue,
+      logger,
     );
 
     postsRepository.create.mockResolvedValue(createdPost as never);
@@ -148,6 +166,24 @@ describe('PostsService', () => {
       await postsService.createPost('user-1', { content: 'hi' });
 
       expect(mediaRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('enqueues a thumbnail job for each attached media row, after the transaction commits', async () => {
+      await postsService.createPost('user-1', {
+        content: 'hi',
+        mediaKeys: ['media/user-1/a.jpg'],
+      });
+
+      expect(imageProcessingQueue.enqueueThumbnailJob).toHaveBeenCalledWith('media-1');
+      expect(imageProcessingQueue.enqueueThumbnailJob).toHaveBeenCalledTimes(1);
+    });
+
+    it('enqueues no jobs when no media was attached', async () => {
+      postsRepository.findById.mockResolvedValue(createdPost as never);
+
+      await postsService.createPost('user-1', { content: 'hi' });
+
+      expect(imageProcessingQueue.enqueueThumbnailJob).not.toHaveBeenCalled();
     });
   });
 

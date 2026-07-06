@@ -1,9 +1,16 @@
 packages:
   - "apps/*"
   - "packages/*"
+overrides:
+  # bullmq pulls in a newer ioredis than our own direct dependency, and pnpm
+  # keeps both installed side by side. That's two structurally distinct
+  # (if identical-behaving) `Redis` types, which breaks passing our own
+  # ioredis instance into BullMQ's `connection` option. Force one version.
+  ioredis: ^5.11.1
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
+  '@scarf/scarf': false
   argon2: true
   cpu-features: true
   msgpackr-extract: true
