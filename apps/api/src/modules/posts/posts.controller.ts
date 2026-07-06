@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
@@ -18,6 +19,8 @@ import { PostsService } from './posts.service';
 import { LikeResponse } from './response/like.response';
 import { PostResponse } from './response/post.response';
 
+@ApiTags('posts')
+@ApiCookieAuth()
 @Controller('posts')
 @UseGuards(JwtAuthGuard)
 export class PostsController {

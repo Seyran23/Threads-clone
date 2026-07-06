@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
@@ -7,6 +8,8 @@ import { PresignUploadDto } from './dto/presign-upload.dto';
 import { MediaService } from './media.service';
 import { PresignedUploadResponse } from './response/presigned-upload.response';
 
+@ApiTags('media')
+@ApiCookieAuth()
 @Controller('media')
 @UseGuards(JwtAuthGuard)
 export class MediaController {
