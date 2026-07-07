@@ -15,3 +15,12 @@ export const EXTENSION_BY_CONTENT_TYPE: Record<(typeof ALLOWED_CONTENT_TYPES)[nu
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
+
+export const IMAGE_PROCESSING_QUEUE_NAME = 'image-processing';
+
+export const THUMBNAIL_MAX_DIMENSION = 600;
+
+export const MAX_INPUT_PIXELS = 50_000_000;
+
+export const IMAGE_PROCESSING_JOB_ATTEMPTS = 3;
+export const IMAGE_PROCESSING_BACKOFF_DELAY_MS = 2000;
