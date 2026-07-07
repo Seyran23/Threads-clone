@@ -30,11 +30,15 @@ describe('AllExceptionsFilter', () => {
   let logger: jest.Mocked<PinoLogger>;
 
   beforeEach(() => {
-    logger = { setContext: jest.fn(), error: jest.fn() } as unknown as jest.Mocked<PinoLogger>;
+    logger = {
+      setContext: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+    } as unknown as jest.Mocked<PinoLogger>;
     filter = new AllExceptionsFilter(logger);
   });
 
-  it('maps an AppException to its own status/code/message, without logging', () => {
+  it('maps an AppException to its own status/code/message, logging it as a warning', () => {
     const { host, response } = createMockHost();
 
     filter.catch(new ConflictException('Email is already registered'), host);
@@ -47,10 +51,14 @@ describe('AllExceptionsFilter', () => {
         message: 'Email is already registered',
       }),
     );
+    expect(logger.warn).toHaveBeenCalledWith(
+      { path: '/test-path', status: HttpStatus.CONFLICT, code: 'CONFLICT' },
+      'Email is already registered',
+    );
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('maps a string-response HttpException, without logging', () => {
+  it('maps a string-response HttpException, logging it as a warning', () => {
     const { host, response } = createMockHost();
 
     filter.catch(new NotFoundException('Route not found'), host);
@@ -58,6 +66,10 @@ describe('AllExceptionsFilter', () => {
     expect(response.status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatus.NOT_FOUND, message: 'Route not found' }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      { path: '/test-path', status: HttpStatus.NOT_FOUND, code: undefined },
+      'Route not found',
     );
     expect(logger.error).not.toHaveBeenCalled();
   });
@@ -70,6 +82,7 @@ describe('AllExceptionsFilter', () => {
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ message: ['email must be an email'] }),
     );
+    expect(logger.warn).toHaveBeenCalledWith(expect.anything(), 'email must be an email');
     expect(logger.error).not.toHaveBeenCalled();
   });
 
@@ -86,6 +99,7 @@ describe('AllExceptionsFilter', () => {
       }),
     );
     expect(logger.error).toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('includes the current correlation ID from RequestContext', () => {

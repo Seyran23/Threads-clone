@@ -9,7 +9,7 @@ interface ResolvedException {
   status: number;
   code?: string;
   message: string | string[];
-  shouldLog: boolean;
+  logLevel: 'warn' | 'error';
 }
 
 @Catch()
@@ -23,10 +23,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { status, code, message, shouldLog } = this.resolve(exception);
+    const { status, code, message, logLevel } = this.resolve(exception);
 
-    if (shouldLog) {
+    if (logLevel === 'error') {
       this.logger.error({ err: exception, path: request.url }, 'Unhandled exception');
+    } else {
+      this.logger.warn(
+        { path: request.url, status, code },
+        Array.isArray(message) ? message.join('; ') : message,
+      );
     }
 
     response.status(status).json({
@@ -45,7 +50,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status: exception.statusCode,
         code: exception.code,
         message: exception.message,
-        shouldLog: false,
+        logLevel: 'warn',
       };
     }
 
@@ -55,13 +60,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         typeof exceptionResponse === 'string'
           ? exceptionResponse
           : ((exceptionResponse as { message?: string | string[] }).message ?? exception.message);
-      return { status: exception.getStatus(), message, shouldLog: false };
+      return { status: exception.getStatus(), message, logLevel: 'warn' };
     }
 
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal server error',
-      shouldLog: true,
+      logLevel: 'error',
     };
   }
 }

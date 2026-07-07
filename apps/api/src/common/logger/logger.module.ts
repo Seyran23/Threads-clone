@@ -11,12 +11,25 @@ import { RequestContext } from '@/common/context/request-context';
         transport:
           process.env.NODE_ENV === 'production'
             ? undefined
-            : { target: 'pino-pretty', options: { singleLine: true, colorize: true } },
+            : {
+                target: 'pino-pretty',
+                options: {
+                  singleLine: true,
+                  colorize: true,
+                  customColors: 'info:green,warn:yellow,error:red,greyMessage:white',
+                },
+              },
         mixin: () => {
           const correlationId = RequestContext.correlationId;
           return correlationId ? { correlationId } : {};
         },
-        redact: ['req.headers.authorization', 'req.headers.cookie'],
+        serializers: {
+          req: (req) => ({ method: req.method, url: req.url }),
+          res: (res) => ({ statusCode: res.statusCode }),
+        },
+        customSuccessMessage: (req, res) => `${req.method} ${req.url} -> ${res.statusCode}`,
+        customErrorMessage: (req, res, err) =>
+          `${req.method} ${req.url} -> ${res.statusCode} (${err.message})`,
       },
     }),
   ],
