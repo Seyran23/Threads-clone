@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { validate } from '@/common/config/env.schema';
 import jwtConfig from '@/common/config/jwt.config';
@@ -14,12 +15,15 @@ import { BullMqModule } from '@/infrastructure/queue/bullmq.module';
 import { RedisModule } from '@/infrastructure/redis/redis.module';
 import { S3Module } from '@/infrastructure/s3/s3.module';
 import { AuthModule } from '@/modules/auth/auth.module';
+import { FeedModule } from '@/modules/feed/feed.module';
+import { FollowsModule } from '@/modules/follows/follows.module';
 import { MediaModule } from '@/modules/media/media.module';
 import { PostsModule } from '@/modules/posts/posts.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate, load: [jwtConfig, s3Config] }),
+    ScheduleModule.forRoot(),
     LoggerModule,
     TokenModule,
     PrismaModule,
@@ -29,7 +33,9 @@ import { PostsModule } from '@/modules/posts/posts.module';
     BullMqModule,
     AuthModule,
     MediaModule,
+    FeedModule,
     PostsModule,
+    FollowsModule,
   ],
   controllers: [],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
