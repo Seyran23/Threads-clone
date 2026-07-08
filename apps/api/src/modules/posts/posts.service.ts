@@ -4,6 +4,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
+import { FanoutQueue } from '@/modules/feed/fanout/queue/fanout.queue';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
@@ -26,6 +27,7 @@ export class PostsService {
     private readonly mediaService: MediaService,
     private readonly mediaRepository: MediaRepository,
     private readonly imageProcessingQueue: ImageProcessingQueue,
+    private readonly fanoutQueue: FanoutQueue,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(PostsService.name);
@@ -48,6 +50,7 @@ export class PostsService {
       return this.refetchWithMedia(tx, created.id);
     });
     await this.enqueueMediaProcessing(post.media);
+    await this.fanoutQueue.enqueueFanout(post.id, authorId, post.createdAt);
     this.logger.info({ postId: post.id, authorId, mediaCount: post.media.length }, 'Post created');
 
     return PostResponse.from(post, 0);

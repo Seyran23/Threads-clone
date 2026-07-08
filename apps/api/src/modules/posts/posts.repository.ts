@@ -5,7 +5,7 @@ import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
 import { CreatePostRecordDto } from './dto/create-post-record.dto';
 import { PostWithRelations } from './response/post.response';
 
-const POST_INCLUDE = {
+export const POST_INCLUDE = {
   author: true,
   hashtags: { include: { hashtag: true } },
   media: { orderBy: { order: 'asc' } },

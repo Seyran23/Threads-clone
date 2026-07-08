@@ -2,6 +2,7 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { ForbiddenException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
+import { FanoutQueue } from '@/modules/feed/fanout/queue/fanout.queue';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
@@ -20,6 +21,7 @@ describe('PostsService', () => {
   let mediaService: jest.Mocked<MediaService>;
   let mediaRepository: jest.Mocked<MediaRepository>;
   let imageProcessingQueue: jest.Mocked<ImageProcessingQueue>;
+  let fanoutQueue: jest.Mocked<FanoutQueue>;
   let logger: jest.Mocked<PinoLogger>;
 
   const tx = {} as never;
@@ -97,6 +99,10 @@ describe('PostsService', () => {
       enqueueThumbnailJob: jest.fn(),
     } as unknown as jest.Mocked<ImageProcessingQueue>;
 
+    fanoutQueue = {
+      enqueueFanout: jest.fn(),
+    } as unknown as jest.Mocked<FanoutQueue>;
+
     logger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -112,6 +118,7 @@ describe('PostsService', () => {
       mediaService,
       mediaRepository,
       imageProcessingQueue,
+      fanoutQueue,
       logger,
     );
 
@@ -185,6 +192,17 @@ describe('PostsService', () => {
 
       expect(imageProcessingQueue.enqueueThumbnailJob).not.toHaveBeenCalled();
     });
+
+    it('enqueues a fanout job after the transaction commits', async () => {
+      await postsService.createPost('user-1', { content: 'hi' });
+
+      expect(fanoutQueue.enqueueFanout).toHaveBeenCalledWith(
+        'post-1',
+        'user-1',
+        createdPost.createdAt,
+      );
+      expect(fanoutQueue.enqueueFanout).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('createReply', () => {
@@ -233,6 +251,12 @@ describe('PostsService', () => {
         url: 'https://public/media/user-1/a.jpg',
         order: 0,
       });
+    });
+
+    it('does not enqueue a fanout job for replies', async () => {
+      await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
+
+      expect(fanoutQueue.enqueueFanout).not.toHaveBeenCalled();
     });
   });
 });
