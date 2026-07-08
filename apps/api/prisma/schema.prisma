@@ -19,21 +19,29 @@ model User {
   refreshTokens RefreshToken[]
   posts         Post[]
   likes         Like[]
+  following     Follow[] @relation("Follower")
+  followedBy    Follow[] @relation("Followee")
 
   @@map("users")
 }
 
+enum FanoutStatus {
+  PENDING
+  COMPLETED
+}
+
 model Post {
-  id        String   @id @default(uuid())
-  authorId  String   @map("author_id")
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  content   String   @db.VarChar(500)
-  parentId  String?  @map("parent_id")
-  parent    Post?    @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Post[]   @relation("PostReplies")
-  depth     Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String       @id @default(uuid())
+  authorId     String       @map("author_id")
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content      String       @db.VarChar(500)
+  parentId     String?      @map("parent_id")
+  parent       Post?        @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Post[]       @relation("PostReplies")
+  depth        Int          @default(0)
+  fanoutStatus FanoutStatus @default(PENDING) @map("fanout_status")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
 
   likes    Like[]
   hashtags PostHashtag[]
@@ -41,7 +49,45 @@ model Post {
 
   @@index([authorId])
   @@index([parentId])
+  @@index([fanoutStatus, createdAt])
   @@map("posts")
+}
+
+model Follow {
+  id         String   @id @default(uuid())
+  followerId String   @map("follower_id")
+  follower   User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followeeId String   @map("followee_id")
+  followee   User     @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followeeId])
+  @@index([followeeId])
+  @@map("follows")
+}
+
+enum GraphSyncEventType {
+  FOLLOW_CREATED
+  FOLLOW_DELETED
+}
+
+enum GraphSyncStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model GraphSyncOutbox {
+  id        String             @id @default(uuid())
+  eventType GraphSyncEventType @map("event_type")
+  payload   Json
+  status    GraphSyncStatus    @default(PENDING)
+  attempts  Int                @default(0)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@map("graph_sync_outbox")
 }
 
 enum MediaProcessingStatus {
