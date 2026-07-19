@@ -16,11 +16,13 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
-  posts         Post[]
-  likes         Like[]
-  following     Follow[] @relation("Follower")
-  followedBy    Follow[] @relation("Followee")
+  refreshTokens         RefreshToken[]
+  posts                 Post[]
+  likes                 Like[]
+  following             Follow[]       @relation("Follower")
+  followedBy            Follow[]       @relation("Followee")
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  notificationsSent     Notification[] @relation("NotificationActor")
 
   @@map("users")
 }
@@ -43,9 +45,10 @@ model Post {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  likes    Like[]
-  hashtags PostHashtag[]
-  media    Media[]
+  likes         Like[]
+  hashtags      PostHashtag[]
+  media         Media[]
+  notifications Notification[]
 
   @@index([authorId])
   @@index([parentId])
@@ -88,6 +91,38 @@ model GraphSyncOutbox {
 
   @@index([status, updatedAt])
   @@map("graph_sync_outbox")
+}
+
+enum NotificationType {
+  LIKE
+  REPLY
+  FOLLOW
+}
+
+enum NotificationStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
+model Notification {
+  id          String             @id @default(uuid())
+  recipientId String             @map("recipient_id")
+  recipient   User               @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String             @map("actor_id")
+  actor       User               @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  postId      String?            @map("post_id")
+  post        Post?              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  status      NotificationStatus @default(PENDING)
+  attempts    Int                @default(0)
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@index([recipientId, createdAt])
+  @@index([status, updatedAt])
+  @@map("notifications")
 }
 
 enum MediaProcessingStatus {
