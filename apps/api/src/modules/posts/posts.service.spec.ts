@@ -1,11 +1,17 @@
 import { PinoLogger } from 'nestjs-pino';
 
-import { ForbiddenException, NotFoundException } from '@/common/exceptions/app.exception';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { FanoutQueue } from '@/modules/feed/fanout/queue/fanout.queue';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
+import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
+import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 
 import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
@@ -22,6 +28,8 @@ describe('PostsService', () => {
   let mediaRepository: jest.Mocked<MediaRepository>;
   let imageProcessingQueue: jest.Mocked<ImageProcessingQueue>;
   let fanoutQueue: jest.Mocked<FanoutQueue>;
+  let notificationsRepository: jest.Mocked<NotificationsRepository>;
+  let notificationDeliveryQueue: jest.Mocked<NotificationDeliveryQueue>;
   let logger: jest.Mocked<PinoLogger>;
 
   const tx = {} as never;
@@ -84,6 +92,12 @@ describe('PostsService', () => {
 
     likesRepository = {
       initializeCount: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+      increment: jest.fn(),
+      decrement: jest.fn(),
+      getCount: jest.fn().mockResolvedValue(0),
     } as unknown as jest.Mocked<LikesRepository>;
 
     mediaService = {
@@ -103,6 +117,14 @@ describe('PostsService', () => {
       enqueueFanout: jest.fn(),
     } as unknown as jest.Mocked<FanoutQueue>;
 
+    notificationsRepository = {
+      createIfNotSelf: jest.fn().mockResolvedValue(null),
+    } as unknown as jest.Mocked<NotificationsRepository>;
+
+    notificationDeliveryQueue = {
+      enqueueDelivery: jest.fn(),
+    } as unknown as jest.Mocked<NotificationDeliveryQueue>;
+
     logger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -119,6 +141,8 @@ describe('PostsService', () => {
       mediaRepository,
       imageProcessingQueue,
       fanoutQueue,
+      notificationsRepository,
+      notificationDeliveryQueue,
       logger,
     );
 
@@ -207,7 +231,7 @@ describe('PostsService', () => {
 
   describe('createReply', () => {
     beforeEach(() => {
-      postsRepository.findDepthById.mockResolvedValue({ depth: 0 });
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'parent-author-1' });
     });
 
     it('throws NotFoundException when the parent post does not exist', async () => {
@@ -234,7 +258,7 @@ describe('PostsService', () => {
     });
 
     it('sets depth to parent depth + 1 and attaches media', async () => {
-      postsRepository.findDepthById.mockResolvedValue({ depth: 2 });
+      postsRepository.findDepthById.mockResolvedValue({ depth: 2, authorId: 'parent-author-1' });
 
       await postsService.createReply('user-1', 'parent-1', {
         content: 'hi',
@@ -257,6 +281,106 @@ describe('PostsService', () => {
       await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
 
       expect(fanoutQueue.enqueueFanout).not.toHaveBeenCalled();
+    });
+
+    it('creates a REPLY notification for the parent post author and enqueues its delivery', async () => {
+      notificationsRepository.createIfNotSelf.mockResolvedValue({
+        id: 'notification-1',
+      } as never);
+
+      await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
+
+      expect(notificationsRepository.createIfNotSelf).toHaveBeenCalledWith(tx, {
+        actorId: 'user-1',
+        recipientId: 'parent-author-1',
+        type: 'REPLY',
+        postId: 'post-1',
+      });
+      expect(notificationDeliveryQueue.enqueueDelivery).toHaveBeenCalledWith('notification-1');
+    });
+
+    it('does not enqueue delivery when no notification was created (self-reply)', async () => {
+      await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
+
+      expect(notificationDeliveryQueue.enqueueDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('likePost', () => {
+    beforeEach(() => {
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'post-author-1' });
+      likesRepository.findOne.mockResolvedValue(null);
+    });
+
+    it('throws NotFoundException when the post does not exist', async () => {
+      postsRepository.findDepthById.mockResolvedValue(null);
+
+      await expect(postsService.likePost('user-1', 'post-1')).rejects.toThrow(NotFoundException);
+      expect(likesRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when already liked', async () => {
+      likesRepository.findOne.mockResolvedValue({
+        id: 'like-1',
+        userId: 'user-1',
+        postId: 'post-1',
+        createdAt: new Date(),
+      });
+
+      await expect(postsService.likePost('user-1', 'post-1')).rejects.toThrow(ConflictException);
+      expect(likesRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the Like row and increments the counter', async () => {
+      await postsService.likePost('user-1', 'post-1');
+
+      expect(likesRepository.create).toHaveBeenCalledWith(tx, 'user-1', 'post-1');
+      expect(likesRepository.increment).toHaveBeenCalledWith('post-1');
+    });
+
+    it('creates a LIKE notification for the post author and enqueues its delivery', async () => {
+      notificationsRepository.createIfNotSelf.mockResolvedValue({
+        id: 'notification-1',
+      } as never);
+
+      await postsService.likePost('user-1', 'post-1');
+
+      expect(notificationsRepository.createIfNotSelf).toHaveBeenCalledWith(tx, {
+        actorId: 'user-1',
+        recipientId: 'post-author-1',
+        type: 'LIKE',
+        postId: 'post-1',
+      });
+      expect(notificationDeliveryQueue.enqueueDelivery).toHaveBeenCalledWith('notification-1');
+    });
+
+    it('does not enqueue delivery when no notification was created (self-like)', async () => {
+      await postsService.likePost('user-1', 'post-1');
+
+      expect(notificationDeliveryQueue.enqueueDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unlikePost', () => {
+    it('does not create a notification for unliking', async () => {
+      likesRepository.findOne.mockResolvedValue({
+        id: 'like-1',
+        userId: 'user-1',
+        postId: 'post-1',
+        createdAt: new Date(),
+      });
+
+      await postsService.unlikePost('user-1', 'post-1');
+
+      expect(notificationsRepository.createIfNotSelf).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when not currently liked', async () => {
+      likesRepository.findOne.mockResolvedValue(null);
+
+      await postsService.unlikePost('user-1', 'post-1');
+
+      expect(likesRepository.delete).not.toHaveBeenCalled();
     });
   });
 });

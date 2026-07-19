@@ -3,6 +3,8 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
+import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
+import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { UsersService } from '@/modules/users/users.service';
 
 import { FollowsRepository } from './follows.repository';
@@ -17,6 +19,8 @@ export class FollowsService {
     private readonly followsRepository: FollowsRepository,
     private readonly graphSyncOutboxRepository: GraphSyncOutboxRepository,
     private readonly graphSyncQueue: GraphSyncQueue,
+    private readonly notificationsRepository: NotificationsRepository,
+    private readonly notificationDeliveryQueue: NotificationDeliveryQueue,
     private readonly usersService: UsersService,
     private readonly logger: PinoLogger,
   ) {
@@ -38,14 +42,25 @@ export class FollowsService {
       throw new ConflictException('Already following this user');
     }
 
-    const outbox = await this.prisma.$transaction(async (tx) => {
+    const { outboxId, notification } = await this.prisma.$transaction(async (tx) => {
       await this.followsRepository.create(tx, { followerId, followeeId });
-      return this.graphSyncOutboxRepository.create(tx, {
+      const outbox = await this.graphSyncOutboxRepository.create(tx, {
         eventType: 'FOLLOW_CREATED',
         payload: { followerId, followeeId },
       });
+      const notification = await this.notificationsRepository.createIfNotSelf(tx, {
+        actorId: followerId,
+        recipientId: followeeId,
+        type: 'FOLLOW',
+      });
+      return { outboxId: outbox.id, notification };
     });
-    await this.graphSyncQueue.enqueueSyncEvent(outbox.id);
+
+    await this.graphSyncQueue.enqueueSyncEvent(outboxId);
+
+    if (notification) {
+      await this.notificationDeliveryQueue.enqueueDelivery(notification.id);
+    }
 
     this.logger.info({ followerId, followeeId }, 'User followed');
     return { following: true };

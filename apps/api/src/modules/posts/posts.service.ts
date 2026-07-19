@@ -8,6 +8,8 @@ import { FanoutQueue } from '@/modules/feed/fanout/queue/fanout.queue';
 import { MediaRepository } from '@/modules/media/media.repository';
 import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
+import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
+import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { HashtagsRepository } from './hashtags.repository';
@@ -28,6 +30,8 @@ export class PostsService {
     private readonly mediaRepository: MediaRepository,
     private readonly imageProcessingQueue: ImageProcessingQueue,
     private readonly fanoutQueue: FanoutQueue,
+    private readonly notificationsRepository: NotificationsRepository,
+    private readonly notificationDeliveryQueue: NotificationDeliveryQueue,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(PostsService.name);
@@ -66,7 +70,7 @@ export class PostsService {
     const mediaKeys = dto.mediaKeys ?? [];
     this.mediaService.assertOwnedByUser(authorId, mediaKeys);
 
-    const post = await this.prisma.$transaction(async (tx) => {
+    const { post, notification } = await this.prisma.$transaction(async (tx) => {
       const created = await this.postsRepository.create(tx, {
         authorId,
         content: dto.content,
@@ -74,11 +78,27 @@ export class PostsService {
         depth: parent.depth + 1,
         hashtagIds,
       });
+
       await this.likesRepository.initializeCount(created.id);
       await this.attachMedia(tx, created.id, mediaKeys);
-      return this.refetchWithMedia(tx, created.id);
+
+      const notification = await this.notificationsRepository.createIfNotSelf(tx, {
+        actorId: authorId,
+        recipientId: parent.authorId,
+        type: 'REPLY',
+        postId: created.id,
+      });
+      const post = await this.refetchWithMedia(tx, created.id);
+
+      return { post, notification };
     });
+
     await this.enqueueMediaProcessing(post.media);
+
+    if (notification) {
+      await this.notificationDeliveryQueue.enqueueDelivery(notification.id);
+    }
+
     this.logger.info(
       { postId: post.id, parentId, authorId, mediaCount: post.media.length },
       'Reply created',
@@ -108,8 +128,21 @@ export class PostsService {
       throw new ConflictException('Post is already liked');
     }
 
-    await this.likesRepository.create(this.prisma, userId, postId);
+    const notification = await this.prisma.$transaction(async (tx) => {
+      await this.likesRepository.create(tx, userId, postId);
+      return this.notificationsRepository.createIfNotSelf(tx, {
+        actorId: userId,
+        recipientId: post.authorId,
+        type: 'LIKE',
+        postId,
+      });
+    });
+
     await this.likesRepository.increment(postId);
+
+    if (notification) {
+      await this.notificationDeliveryQueue.enqueueDelivery(notification.id);
+    }
 
     const likeCount = await this.likesRepository.getCount(this.prisma, postId);
     this.logger.info({ postId, userId }, 'Post liked');

@@ -17,8 +17,11 @@ export class PostsRepository {
     return tx.post.findUnique({ where: { id }, include: POST_INCLUDE });
   }
 
-  findDepthById(tx: PrismaClientOrTx, id: string): Promise<{ depth: number } | null> {
-    return tx.post.findUnique({ where: { id }, select: { depth: true } });
+  findDepthById(
+    tx: PrismaClientOrTx,
+    id: string,
+  ): Promise<{ depth: number; authorId: string } | null> {
+    return tx.post.findUnique({ where: { id }, select: { depth: true, authorId: true } });
   }
 
   create(tx: PrismaClientOrTx, data: CreatePostRecordDto): Promise<PostWithRelations> {

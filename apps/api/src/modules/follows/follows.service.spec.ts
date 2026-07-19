@@ -2,6 +2,8 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
+import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
+import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { UsersService } from '@/modules/users/users.service';
 
 import { FollowsRepository } from './follows.repository';
@@ -15,6 +17,8 @@ describe('FollowsService', () => {
   let followsRepository: jest.Mocked<FollowsRepository>;
   let graphSyncOutboxRepository: jest.Mocked<GraphSyncOutboxRepository>;
   let graphSyncQueue: jest.Mocked<GraphSyncQueue>;
+  let notificationsRepository: jest.Mocked<NotificationsRepository>;
+  let notificationDeliveryQueue: jest.Mocked<NotificationDeliveryQueue>;
   let usersService: jest.Mocked<UsersService>;
   let logger: jest.Mocked<PinoLogger>;
 
@@ -47,6 +51,14 @@ describe('FollowsService', () => {
       enqueueSyncEvent: jest.fn(),
     } as unknown as jest.Mocked<GraphSyncQueue>;
 
+    notificationsRepository = {
+      createIfNotSelf: jest.fn(),
+    } as unknown as jest.Mocked<NotificationsRepository>;
+
+    notificationDeliveryQueue = {
+      enqueueDelivery: jest.fn(),
+    } as unknown as jest.Mocked<NotificationDeliveryQueue>;
+
     usersService = {
       findById: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
@@ -63,6 +75,8 @@ describe('FollowsService', () => {
       followsRepository,
       graphSyncOutboxRepository,
       graphSyncQueue,
+      notificationsRepository,
+      notificationDeliveryQueue,
       usersService,
       logger,
     );
@@ -73,6 +87,17 @@ describe('FollowsService', () => {
       id: 'outbox-1',
       eventType: 'FOLLOW_CREATED',
       payload: {},
+      status: 'PENDING',
+      attempts: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+    notificationsRepository.createIfNotSelf.mockResolvedValue({
+      id: 'notification-1',
+      actorId: 'user-1',
+      recipientId: 'user-2',
+      type: 'FOLLOW',
+      postId: null,
       status: 'PENDING',
       attempts: 0,
       createdAt: new Date(),
@@ -125,6 +150,25 @@ describe('FollowsService', () => {
       expect(graphSyncQueue.enqueueSyncEvent).toHaveBeenCalledWith('outbox-1');
       expect(result).toEqual({ following: true });
     });
+
+    it('creates a FOLLOW notification and enqueues its delivery', async () => {
+      await followsService.followUser('user-1', 'user-2');
+
+      expect(notificationsRepository.createIfNotSelf).toHaveBeenCalledWith(tx, {
+        actorId: 'user-1',
+        recipientId: 'user-2',
+        type: 'FOLLOW',
+      });
+      expect(notificationDeliveryQueue.enqueueDelivery).toHaveBeenCalledWith('notification-1');
+    });
+
+    it('does not enqueue delivery when no notification was created (self-action guard)', async () => {
+      notificationsRepository.createIfNotSelf.mockResolvedValue(null);
+
+      await followsService.followUser('user-1', 'user-2');
+
+      expect(notificationDeliveryQueue.enqueueDelivery).not.toHaveBeenCalled();
+    });
   });
 
   describe('unfollowUser', () => {
@@ -154,6 +198,19 @@ describe('FollowsService', () => {
       });
       expect(graphSyncQueue.enqueueSyncEvent).toHaveBeenCalledWith('outbox-1');
       expect(result).toEqual({ following: false });
+    });
+
+    it('does not create a notification for unfollowing', async () => {
+      followsRepository.findOne.mockResolvedValue({
+        id: 'follow-1',
+        followerId: 'user-1',
+        followeeId: 'user-2',
+        createdAt: new Date(),
+      });
+
+      await followsService.unfollowUser('user-1', 'user-2');
+
+      expect(notificationsRepository.createIfNotSelf).not.toHaveBeenCalled();
     });
   });
 });

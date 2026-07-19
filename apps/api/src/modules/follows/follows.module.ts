@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { UsersModule } from '@/modules/users/users.module';
 
 import { FollowsController } from './follows.controller';
@@ -12,7 +13,7 @@ import { GraphSyncQueue } from './graph-sync/queue/graph-sync.queue';
 import { GraphSyncSweepService } from './graph-sync/sweep/graph-sync-sweep.service';
 
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, NotificationsModule],
   controllers: [FollowsController],
   providers: [
     FollowsService,
