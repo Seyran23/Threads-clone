@@ -14,10 +14,12 @@ import { PrismaModule } from '@/infrastructure/prisma/prisma.module';
 import { BullMqModule } from '@/infrastructure/queue/bullmq.module';
 import { RedisModule } from '@/infrastructure/redis/redis.module';
 import { S3Module } from '@/infrastructure/s3/s3.module';
+import { SocketModule } from '@/infrastructure/socket/socket.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { FeedModule } from '@/modules/feed/feed.module';
 import { FollowsModule } from '@/modules/follows/follows.module';
 import { MediaModule } from '@/modules/media/media.module';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { PostsModule } from '@/modules/posts/posts.module';
 
 @Module({
@@ -31,9 +33,11 @@ import { PostsModule } from '@/modules/posts/posts.module';
     Neo4jModule,
     S3Module,
     BullMqModule,
+    SocketModule,
     AuthModule,
     MediaModule,
     FeedModule,
+    NotificationsModule,
     PostsModule,
     FollowsModule,
   ],

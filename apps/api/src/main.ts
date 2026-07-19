@@ -7,6 +7,7 @@ import { Logger } from 'nestjs-pino';
 
 import { correlationIdMiddleware } from '@/common/middleware/correlation-id.middleware';
 import { ACCESS_TOKEN_COOKIE } from '@/common/token/token-cookie.constants';
+import { RedisIoAdapter } from '@/infrastructure/socket/redis-io.adapter';
 
 import { AppModule } from './app.module';
 
@@ -17,6 +18,10 @@ async function bootstrap() {
   app.use(correlationIdMiddleware);
   app.use(cookieParser());
   app.useLogger(app.get(Logger));
+
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
