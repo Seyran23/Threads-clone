@@ -4,9 +4,14 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { BullMqConnectionService } from '@/infrastructure/queue/bullmq-connection.service';
+import { RealtimeGateway } from '@/infrastructure/socket/realtime.gateway';
 
 import { FeedRepository } from '../../feed.repository';
-import { FANOUT_QUEUE_NAME, HYBRID_FANOUT_FOLLOWER_THRESHOLD } from '../fanout.constants';
+import {
+  FANOUT_QUEUE_NAME,
+  FEED_NEW_POST_EVENT,
+  HYBRID_FANOUT_FOLLOWER_THRESHOLD,
+} from '../fanout.constants';
 import { FanoutJobData } from '../interface/fanout-job-data.interface';
 
 @Injectable()
@@ -16,6 +21,7 @@ export class FanoutProcessor implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly connection: BullMqConnectionService,
     private readonly feedRepository: FeedRepository,
+    private readonly realtimeGateway: RealtimeGateway,
     private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
   ) {
@@ -50,9 +56,14 @@ export class FanoutProcessor implements OnModuleInit, OnModuleDestroy {
         const score = new Date(createdAt).getTime();
 
         await Promise.all(
-          recipientIds.map((recipientId) =>
-            this.feedRepository.pushToFeed(recipientId, postId, score),
-          ),
+          recipientIds.map(async (recipientId) => {
+            await this.feedRepository.pushToFeed(recipientId, postId, score);
+            await this.realtimeGateway.emitToUser(recipientId, FEED_NEW_POST_EVENT, {
+              postId,
+              authorId,
+              createdAt,
+            });
+          }),
         );
         this.logger.info(
           { postId, recipientCount: recipientIds.length },

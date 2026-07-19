@@ -3,9 +3,10 @@ import { PinoLogger } from 'nestjs-pino';
 
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { BullMqConnectionService } from '@/infrastructure/queue/bullmq-connection.service';
+import { RealtimeGateway } from '@/infrastructure/socket/realtime.gateway';
 
 import { FeedRepository } from '../../feed.repository';
-import { HYBRID_FANOUT_FOLLOWER_THRESHOLD } from '../fanout.constants';
+import { FEED_NEW_POST_EVENT, HYBRID_FANOUT_FOLLOWER_THRESHOLD } from '../fanout.constants';
 import { FanoutJobData } from '../interface/fanout-job-data.interface';
 
 import { FanoutProcessor } from './fanout.processor';
@@ -18,6 +19,7 @@ jest.mock('bullmq', () => ({
 describe('FanoutProcessor', () => {
   let processor: FanoutProcessor;
   let feedRepository: jest.Mocked<FeedRepository>;
+  let realtimeGateway: jest.Mocked<RealtimeGateway>;
   let prisma: PrismaService;
   let logger: jest.Mocked<PinoLogger>;
 
@@ -35,6 +37,10 @@ describe('FanoutProcessor', () => {
       markFanoutCompleted: jest.fn(),
     } as unknown as jest.Mocked<FeedRepository>;
 
+    realtimeGateway = {
+      emitToUser: jest.fn().mockResolvedValue(true),
+    } as unknown as jest.Mocked<RealtimeGateway>;
+
     prisma = {} as PrismaService;
 
     logger = {
@@ -44,7 +50,13 @@ describe('FanoutProcessor', () => {
       error: jest.fn(),
     } as unknown as jest.Mocked<PinoLogger>;
 
-    processor = new FanoutProcessor({} as BullMqConnectionService, feedRepository, prisma, logger);
+    processor = new FanoutProcessor(
+      {} as BullMqConnectionService,
+      feedRepository,
+      realtimeGateway,
+      prisma,
+      logger,
+    );
   });
 
   it('pushes the post to every follower feed and the author own feed, then marks fanout completed', async () => {
@@ -67,6 +79,22 @@ describe('FanoutProcessor', () => {
     );
     expect(feedRepository.pushToFeed).toHaveBeenCalledTimes(3);
     expect(feedRepository.markFanoutCompleted).toHaveBeenCalledWith(prisma, 'post-1');
+  });
+
+  it('emits a best-effort feed:new-post event to every recipient', async () => {
+    await processor.processJob(job);
+
+    expect(realtimeGateway.emitToUser).toHaveBeenCalledWith('follower-1', FEED_NEW_POST_EVENT, {
+      postId: 'post-1',
+      authorId: 'author-1',
+      createdAt: job.data.createdAt,
+    });
+    expect(realtimeGateway.emitToUser).toHaveBeenCalledWith('author-1', FEED_NEW_POST_EVENT, {
+      postId: 'post-1',
+      authorId: 'author-1',
+      createdAt: job.data.createdAt,
+    });
+    expect(realtimeGateway.emitToUser).toHaveBeenCalledTimes(3);
   });
 
   it('skips pushing to feeds for accounts over the hybrid follower threshold, but still marks completed', async () => {
