@@ -1,0 +1,6 @@
+export const NOTIFICATION_DELIVERY_QUEUE_NAME = 'notification-delivery';
+export const NOTIFICATION_DELIVERY_JOB_ATTEMPTS = 3;
+export const NOTIFICATION_DELIVERY_BACKOFF_DELAY_MS = 2000;
+export const NOTIFICATION_MAX_ATTEMPTS = 5;
+export const NOTIFICATION_STUCK_THRESHOLD_MS = 60 * 1000;
+export const NOTIFICATION_EVENT = 'notification:new';
