@@ -18,9 +18,12 @@ import { SocketModule } from '@/infrastructure/socket/socket.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { FeedModule } from '@/modules/feed/feed.module';
 import { FollowsModule } from '@/modules/follows/follows.module';
+import { GraphModule } from '@/modules/graph/graph.module';
 import { MediaModule } from '@/modules/media/media.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { PostsModule } from '@/modules/posts/posts.module';
+import { SearchModule } from '@/modules/search/search.module';
+import { TrendingModule } from '@/modules/trending/trending.module';
 
 @Module({
   imports: [
@@ -38,6 +41,9 @@ import { PostsModule } from '@/modules/posts/posts.module';
     MediaModule,
     FeedModule,
     NotificationsModule,
+    TrendingModule,
+    SearchModule,
+    GraphModule,
     PostsModule,
     FollowsModule,
   ],
