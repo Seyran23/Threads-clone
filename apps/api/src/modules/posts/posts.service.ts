@@ -10,6 +10,7 @@ import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
 import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
+import { TrendingService } from '@/modules/trending/trending.service';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { HashtagsRepository } from './hashtags.repository';
@@ -32,6 +33,7 @@ export class PostsService {
     private readonly fanoutQueue: FanoutQueue,
     private readonly notificationsRepository: NotificationsRepository,
     private readonly notificationDeliveryQueue: NotificationDeliveryQueue,
+    private readonly trendingService: TrendingService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(PostsService.name);
@@ -55,6 +57,7 @@ export class PostsService {
     });
     await this.enqueueMediaProcessing(post.media);
     await this.fanoutQueue.enqueueFanout(post.id, authorId, post.createdAt);
+    await this.trendingService.recordUsage(extractHashtags(dto.content));
     this.logger.info({ postId: post.id, authorId, mediaCount: post.media.length }, 'Post created');
 
     return PostResponse.from(post, 0);
@@ -94,6 +97,7 @@ export class PostsService {
     });
 
     await this.enqueueMediaProcessing(post.media);
+    await this.trendingService.recordUsage(extractHashtags(dto.content));
 
     if (notification) {
       await this.notificationDeliveryQueue.enqueueDelivery(notification.id);

@@ -12,6 +12,7 @@ import { MediaService } from '@/modules/media/media.service';
 import { ImageProcessingQueue } from '@/modules/media/queue/image-processing.queue';
 import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
+import { TrendingService } from '@/modules/trending/trending.service';
 
 import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
@@ -30,6 +31,7 @@ describe('PostsService', () => {
   let fanoutQueue: jest.Mocked<FanoutQueue>;
   let notificationsRepository: jest.Mocked<NotificationsRepository>;
   let notificationDeliveryQueue: jest.Mocked<NotificationDeliveryQueue>;
+  let trendingService: jest.Mocked<TrendingService>;
   let logger: jest.Mocked<PinoLogger>;
 
   const tx = {} as never;
@@ -125,6 +127,10 @@ describe('PostsService', () => {
       enqueueDelivery: jest.fn(),
     } as unknown as jest.Mocked<NotificationDeliveryQueue>;
 
+    trendingService = {
+      recordUsage: jest.fn(),
+    } as unknown as jest.Mocked<TrendingService>;
+
     logger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -143,6 +149,7 @@ describe('PostsService', () => {
       fanoutQueue,
       notificationsRepository,
       notificationDeliveryQueue,
+      trendingService,
       logger,
     );
 
@@ -227,6 +234,18 @@ describe('PostsService', () => {
       );
       expect(fanoutQueue.enqueueFanout).toHaveBeenCalledTimes(1);
     });
+
+    it('records trending usage for each hashtag in the content, after the transaction commits', async () => {
+      await postsService.createPost('user-1', { content: 'hi #foo #bar' });
+
+      expect(trendingService.recordUsage).toHaveBeenCalledWith(['foo', 'bar']);
+    });
+
+    it('records an empty trending usage call when there are no hashtags', async () => {
+      await postsService.createPost('user-1', { content: 'hi' });
+
+      expect(trendingService.recordUsage).toHaveBeenCalledWith([]);
+    });
   });
 
   describe('createReply', () => {
@@ -303,6 +322,12 @@ describe('PostsService', () => {
       await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
 
       expect(notificationDeliveryQueue.enqueueDelivery).not.toHaveBeenCalled();
+    });
+
+    it('records trending usage for hashtags in a reply too', async () => {
+      await postsService.createReply('user-1', 'parent-1', { content: 'hi #foo' });
+
+      expect(trendingService.recordUsage).toHaveBeenCalledWith(['foo']);
     });
   });
 
