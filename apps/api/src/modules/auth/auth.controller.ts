@@ -1,13 +1,27 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { NotFoundException } from '@/common/exceptions/app.exception';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from '@/common/throttler/app-throttler.guard';
 import {
   AUTH_CREDENTIAL_THROTTLE,
   AUTH_REFRESH_THROTTLE,
 } from '@/common/throttler/throttler.constants';
+import { UsersService } from '@/modules/users/users.service';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -19,7 +33,23 @@ import { clearAuthCookies, getRefreshTokenCookie, setAuthCookies } from './utils
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
+
+  @Get('me')
+  @ApiCookieAuth()
+  @UseGuards(JwtAuthGuard)
+  async me(@CurrentUser() user: { id: string }): Promise<AuthResponse> {
+    const fullUser = await this.usersService.findById(user.id);
+
+    if (!fullUser) {
+      throw new NotFoundException('User', user.id);
+    }
+
+    return AuthResponse.from(fullUser);
+  }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
