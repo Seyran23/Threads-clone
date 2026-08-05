@@ -1,6 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+
+import { AppThrottlerGuard } from '@/common/throttler/app-throttler.guard';
+import {
+  AUTH_CREDENTIAL_THROTTLE,
+  AUTH_REFRESH_THROTTLE,
+} from '@/common/throttler/throttler.constants';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -16,6 +23,8 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(AUTH_CREDENTIAL_THROTTLE)
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) response: Response,
@@ -27,6 +36,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(AUTH_CREDENTIAL_THROTTLE)
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) response: Response,
@@ -38,6 +49,8 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(AUTH_REFRESH_THROTTLE)
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,

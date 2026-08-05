@@ -67,6 +67,7 @@ describe('PostsService', () => {
         s3Key: 'media/user-1/a.jpg',
         url: 'https://public/media/user-1/a.jpg',
         thumbnailUrl: null,
+        blurHash: null,
         width: null,
         height: null,
         order: 0,

@@ -10,9 +10,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { AppThrottlerGuard } from '@/common/throttler/app-throttler.guard';
+import { LIKE_THROTTLE, POST_CREATE_THROTTLE } from '@/common/throttler/throttler.constants';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostsService } from './posts.service';
@@ -28,6 +31,8 @@ export class PostsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(POST_CREATE_THROTTLE)
   createPost(
     @CurrentUser() user: { id: string },
     @Body() dto: CreatePostDto,
@@ -42,6 +47,8 @@ export class PostsController {
 
   @Post(':id/replies')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(POST_CREATE_THROTTLE)
   createReply(
     @CurrentUser() user: { id: string },
     @Param('id') parentId: string,
@@ -52,12 +59,16 @@ export class PostsController {
 
   @Post(':id/like')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(LIKE_THROTTLE)
   likePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<LikeResponse> {
     return this.postsService.likePost(user.id, id);
   }
 
   @Delete(':id/like')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(LIKE_THROTTLE)
   unlikePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<LikeResponse> {
     return this.postsService.unlikePost(user.id, id);
   }
