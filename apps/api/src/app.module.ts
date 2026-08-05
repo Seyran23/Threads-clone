@@ -8,6 +8,7 @@ import jwtConfig from '@/common/config/jwt.config';
 import s3Config from '@/common/config/s3.config';
 import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
 import { LoggerModule } from '@/common/logger/logger.module';
+import { AppThrottlerModule } from '@/common/throttler/app-throttler.module';
 import { TokenModule } from '@/common/token/token.module';
 import { Neo4jModule } from '@/infrastructure/neo4j/neo4j.module';
 import { PrismaModule } from '@/infrastructure/prisma/prisma.module';
@@ -30,6 +31,7 @@ import { TrendingModule } from '@/modules/trending/trending.module';
     ConfigModule.forRoot({ isGlobal: true, validate, load: [jwtConfig, s3Config] }),
     ScheduleModule.forRoot(),
     LoggerModule,
+    AppThrottlerModule,
     TokenModule,
     PrismaModule,
     RedisModule,
