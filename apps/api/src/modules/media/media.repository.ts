@@ -32,6 +32,7 @@ export class MediaRepository {
       where: { id },
       data: {
         thumbnailUrl: data.thumbnailUrl,
+        blurHash: data.blurHash,
         width: data.width,
         height: data.height,
         processingStatus: 'READY',

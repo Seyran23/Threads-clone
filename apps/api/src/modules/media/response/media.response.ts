@@ -4,6 +4,7 @@ export class MediaResponse {
   id!: string;
   url!: string;
   thumbnailUrl!: string | null;
+  blurHash!: string | null;
   width!: number | null;
   height!: number | null;
   processingStatus!: MediaProcessingStatus;
@@ -13,6 +14,7 @@ export class MediaResponse {
       id: media.id,
       url: media.url,
       thumbnailUrl: media.thumbnailUrl,
+      blurHash: media.blurHash,
       width: media.width,
       height: media.height,
       processingStatus: media.processingStatus,

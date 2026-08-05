@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { encode as encodeBlurHash } from 'blurhash';
 import { Job, Worker } from 'bullmq';
 import { PinoLogger } from 'nestjs-pino';
 import sharp from 'sharp';
@@ -8,6 +9,9 @@ import { BullMqConnectionService } from '@/infrastructure/queue/bullmq-connectio
 import { S3Service } from '@/infrastructure/s3/s3.service';
 
 import {
+  BLURHASH_COMPONENTS_X,
+  BLURHASH_COMPONENTS_Y,
+  BLURHASH_SAMPLE_SIZE,
   IMAGE_PROCESSING_QUEUE_NAME,
   MAX_INPUT_PIXELS,
   THUMBNAIL_MAX_DIMENSION,
@@ -70,6 +74,7 @@ export class ImageProcessingProcessor implements OnModuleInit, OnModuleDestroy {
       );
 
       const thumbnail = await image
+        .clone()
         .resize({
           width: THUMBNAIL_MAX_DIMENSION,
           height: THUMBNAIL_MAX_DIMENSION,
@@ -84,8 +89,26 @@ export class ImageProcessingProcessor implements OnModuleInit, OnModuleDestroy {
       await this.s3Service.putObject(thumbnailKey, thumbnail, 'image/jpeg');
       this.logger.info({ mediaId, thumbnailKey }, 'Uploaded thumbnail to S3');
 
+      const { data: rawPixels, info: rawInfo } = await image
+        .clone()
+        .resize(BLURHASH_SAMPLE_SIZE, BLURHASH_SAMPLE_SIZE, { fit: 'inside' })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const blurHash = encodeBlurHash(
+        new Uint8ClampedArray(rawPixels),
+        rawInfo.width,
+        rawInfo.height,
+        BLURHASH_COMPONENTS_X,
+        BLURHASH_COMPONENTS_Y,
+      );
+
+      this.logger.info({ mediaId, blurHash }, 'Computed BlurHash placeholder');
+
       await this.mediaRepository.markReady(this.prisma, media.id, {
         thumbnailUrl: this.s3Service.getPublicUrl(thumbnailKey),
+        blurHash,
         width: metadata.width ?? null,
         height: metadata.height ?? null,
       });

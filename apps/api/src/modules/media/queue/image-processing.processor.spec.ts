@@ -13,6 +13,9 @@ import { ImageProcessingProcessor } from './image-processing.processor';
 import { ThumbnailJobData } from './thumbnail-job-data.interface';
 
 jest.mock('sharp');
+jest.mock('blurhash', () => ({
+  encode: jest.fn().mockReturnValue('LEHV6nWB2yk8pyo0adR*.7kCMdnj'),
+}));
 jest.mock('bullmq', () => ({
   ...jest.requireActual('bullmq'),
   Worker: jest.fn().mockImplementation(() => ({ on: jest.fn(), close: jest.fn() })),
@@ -71,17 +74,31 @@ describe('ImageProcessingProcessor', () => {
 
     prisma = {} as PrismaService;
 
-    mockToBuffer = jest.fn().mockResolvedValue(Buffer.from('thumbnail-bytes'));
+    mockToBuffer = jest.fn().mockImplementation((opts?: { resolveWithObject?: boolean }) => {
+      if (opts?.resolveWithObject) {
+        return Promise.resolve({
+          data: Buffer.from('raw-pixel-bytes'),
+          info: { width: 32, height: 18 },
+        });
+      }
+      return Promise.resolve(Buffer.from('thumbnail-bytes'));
+    });
     mockJpeg = jest.fn();
     mockResize = jest.fn();
     mockMetadata = jest.fn().mockResolvedValue({ width: 1920, height: 1080 });
 
     const fakeSharpInstance = {
       metadata: mockMetadata,
+      clone: jest.fn(),
       resize: mockResize,
       jpeg: mockJpeg,
+      ensureAlpha: jest.fn(),
+      raw: jest.fn(),
       toBuffer: mockToBuffer,
     };
+    fakeSharpInstance.clone.mockReturnValue(fakeSharpInstance);
+    fakeSharpInstance.ensureAlpha.mockReturnValue(fakeSharpInstance);
+    fakeSharpInstance.raw.mockReturnValue(fakeSharpInstance);
     mockResize.mockReturnValue(fakeSharpInstance);
     mockJpeg.mockReturnValue(fakeSharpInstance);
     jest.mocked(sharp).mockReturnValue(fakeSharpInstance as never);
@@ -140,9 +157,20 @@ describe('ImageProcessingProcessor', () => {
     );
     expect(mediaRepository.markReady).toHaveBeenCalledWith(prisma, 'media-1', {
       thumbnailUrl: 'https://public/media/user-1/abc-thumb.jpg',
+      blurHash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
       width: 1920,
       height: 1080,
     });
+  });
+
+  it('computes a BlurHash from a downsampled raw pixel buffer', async () => {
+    await processor.processJob(job);
+
+    expect(mediaRepository.markReady).toHaveBeenCalledWith(
+      prisma,
+      'media-1',
+      expect.objectContaining({ blurHash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj' }),
+    );
   });
 
   it('logs every step of a successful run', async () => {

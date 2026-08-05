@@ -142,6 +142,7 @@ model Media {
   s3Key            String                @map("s3_key")
   url              String
   thumbnailUrl     String?               @map("thumbnail_url")
+  blurHash         String?               @map("blur_hash")
   width            Int?
   height           Int?
   order            Int
