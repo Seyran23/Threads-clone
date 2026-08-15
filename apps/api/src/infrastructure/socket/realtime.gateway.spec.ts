@@ -162,6 +162,14 @@ describe('RealtimeGateway', () => {
   });
 
   describe('emitToUser', () => {
+    it('returns false without throwing when no WebSocket server is attached', async () => {
+      (gateway as unknown as { server: unknown }).server = undefined;
+
+      const delivered = await gateway.emitToUser('user-1', 'notification:new', { id: 'n-1' });
+
+      expect(delivered).toBe(false);
+    });
+
     it('returns false and does not emit when the user has no active sockets', async () => {
       server.fetchSockets.mockResolvedValue([]);
 

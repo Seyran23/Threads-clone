@@ -103,6 +103,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   async emitToUser(userId: string, event: string, payload: unknown): Promise<boolean> {
+    if (!this.server) {
+      return false;
+    }
+
     const room = this.userRoom(userId);
     const sockets = await this.server.in(room).fetchSockets();
 
