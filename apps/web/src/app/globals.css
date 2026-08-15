@@ -128,3 +128,18 @@
     @apply font-sans;
   }
 }
+
+@keyframes spin-ring {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-ring {
+    animation: none !important;
+  }
+}
