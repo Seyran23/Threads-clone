@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
@@ -18,9 +19,11 @@ import { AppThrottlerGuard } from '@/common/throttler/app-throttler.guard';
 import { LIKE_THROTTLE, POST_CREATE_THROTTLE } from '@/common/throttler/throttler.constants';
 
 import { CreatePostDto } from './dto/create-post.dto';
+import { GetRepliesQueryDto } from './dto/get-replies-query.dto';
 import { PostsService } from './posts.service';
 import { LikeResponse } from './response/like.response';
 import { PostResponse } from './response/post.response';
+import { RepliesResponse } from './response/replies.response';
 
 @ApiTags('posts')
 @ApiCookieAuth()
@@ -41,8 +44,17 @@ export class PostsController {
   }
 
   @Get(':id')
-  getPost(@Param('id') id: string): Promise<PostResponse> {
-    return this.postsService.getPost(id);
+  getPost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<PostResponse> {
+    return this.postsService.getPost(user.id, id);
+  }
+
+  @Get(':id/replies')
+  getReplies(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Query() query: GetRepliesQueryDto,
+  ): Promise<RepliesResponse> {
+    return this.postsService.getReplies(user.id, id, query.cursor, query.limit);
   }
 
   @Post(':id/replies')

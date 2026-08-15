@@ -42,6 +42,7 @@ model Post {
   parent       Post?        @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies      Post[]       @relation("PostReplies")
   depth        Int          @default(0)
+  replyCount   Int          @default(0) @map("reply_count")
   fanoutStatus FanoutStatus @default(PENDING) @map("fanout_status")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -55,6 +56,7 @@ model Post {
 
   @@index([authorId])
   @@index([parentId])
+  @@index([parentId, createdAt])
   @@index([fanoutStatus, createdAt])
   @@map("posts")
 }

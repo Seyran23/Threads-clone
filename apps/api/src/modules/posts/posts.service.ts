@@ -18,7 +18,9 @@ import { LikesRepository } from './likes.repository';
 import { PostsRepository } from './posts.repository';
 import { LikeResponse } from './response/like.response';
 import { PostResponse, PostWithRelations } from './response/post.response';
+import { RepliesResponse } from './response/replies.response';
 import { extractHashtags } from './utils/hashtag.util';
+import { decodeRepliesCursor, encodeRepliesCursor } from './utils/replies-cursor.util';
 
 @Injectable()
 export class PostsService {
@@ -60,7 +62,7 @@ export class PostsService {
     await this.trendingService.recordUsage(extractHashtags(dto.content));
     this.logger.info({ postId: post.id, authorId, mediaCount: post.media.length }, 'Post created');
 
-    return PostResponse.from(post, 0);
+    return PostResponse.from(post, 0, false, false);
   }
 
   async createReply(authorId: string, parentId: string, dto: CreatePostDto): Promise<PostResponse> {
@@ -84,6 +86,7 @@ export class PostsService {
 
       await this.likesRepository.initializeCount(created.id);
       await this.attachMedia(tx, created.id, mediaKeys);
+      await this.postsRepository.incrementReplyCount(tx, parentId);
 
       const notification = await this.notificationsRepository.createIfNotSelf(tx, {
         actorId: authorId,
@@ -108,17 +111,67 @@ export class PostsService {
       'Reply created',
     );
 
-    return PostResponse.from(post, 0);
+    return PostResponse.from(post, 0, false, false);
   }
 
-  async getPost(id: string): Promise<PostResponse> {
+  async getPost(viewerId: string, id: string): Promise<PostResponse> {
     const post = await this.postsRepository.findById(this.prisma, id);
     if (!post) {
       throw new NotFoundException('Post', id);
     }
 
     const likeCount = await this.likesRepository.getCount(this.prisma, id);
-    return PostResponse.from(post, likeCount);
+    const likedPostIds = await this.likesRepository.findLikedPostIds(this.prisma, viewerId, [id]);
+    const followedAuthorIds = await this.postsRepository.findFollowedAuthorIds(
+      this.prisma,
+      viewerId,
+      [post.authorId],
+    );
+    return PostResponse.from(
+      post,
+      likeCount,
+      likedPostIds.has(id),
+      followedAuthorIds.has(post.authorId),
+    );
+  }
+
+  async getReplies(
+    viewerId: string,
+    parentId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<RepliesResponse> {
+    const parent = await this.postsRepository.findDepthById(this.prisma, parentId);
+    if (!parent) {
+      throw new NotFoundException('Post', parentId);
+    }
+
+    const afterMs = decodeRepliesCursor(cursor);
+    const replies = await this.postsRepository.findReplies(this.prisma, parentId, afterMs, limit);
+    const replyIds = replies.map((reply) => reply.id);
+    const authorIds = replies.map((reply) => reply.authorId);
+
+    const [likeCounts, likedPostIds, followedAuthorIds] = await Promise.all([
+      this.likesRepository.getCounts(replyIds),
+      this.likesRepository.findLikedPostIds(this.prisma, viewerId, replyIds),
+      this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, authorIds),
+    ]);
+
+    const items = replies.map((reply) =>
+      PostResponse.from(
+        reply,
+        likeCounts.get(reply.id) ?? 0,
+        likedPostIds.has(reply.id),
+        followedAuthorIds.has(reply.authorId),
+      ),
+    );
+
+    const hasMore = replies.length === limit;
+    const nextCursor = hasMore
+      ? encodeRepliesCursor(replies[replies.length - 1].createdAt.getTime())
+      : null;
+
+    return { items, nextCursor };
   }
 
   async likePost(userId: string, postId: string): Promise<LikeResponse> {

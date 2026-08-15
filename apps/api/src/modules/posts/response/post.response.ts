@@ -15,12 +15,20 @@ export class PostResponse {
   parentId!: string | null;
   depth!: number;
   likeCount!: number;
+  isLiked!: boolean;
+  replyCount!: number;
+  isFollowing!: boolean;
   hashtags!: string[];
   media!: MediaResponse[];
   createdAt!: Date;
   updatedAt!: Date;
 
-  static from(post: PostWithRelations, likeCount: number): PostResponse {
+  static from(
+    post: PostWithRelations,
+    likeCount: number,
+    isLiked: boolean,
+    isFollowing: boolean,
+  ): PostResponse {
     return {
       id: post.id,
       author: UserResponse.from(post.author),
@@ -28,6 +36,9 @@ export class PostResponse {
       parentId: post.parentId,
       depth: post.depth,
       likeCount,
+      isLiked,
+      replyCount: post.replyCount,
+      isFollowing,
       hashtags: post.hashtags.map((h) => h.hashtag.tag),
       media: post.media.map((m) => MediaResponse.from(m)),
       createdAt: post.createdAt,

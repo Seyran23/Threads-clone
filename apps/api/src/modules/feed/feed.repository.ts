@@ -131,6 +131,39 @@ export class FeedRepository {
     return counts;
   }
 
+  async getLikedPostIds(
+    tx: PrismaClientOrTx,
+    userId: string,
+    postIds: string[],
+  ): Promise<Set<string>> {
+    if (postIds.length === 0) {
+      return new Set();
+    }
+
+    const likes = await tx.like.findMany({
+      where: { userId, postId: { in: postIds } },
+      select: { postId: true },
+    });
+    return new Set(likes.map((like) => like.postId));
+  }
+
+  async getFollowedAuthorIds(
+    tx: PrismaClientOrTx,
+    viewerId: string,
+    authorIds: string[],
+  ): Promise<Set<string>> {
+    const uniqueIds = [...new Set(authorIds)].filter((id) => id !== viewerId);
+    if (uniqueIds.length === 0) {
+      return new Set();
+    }
+
+    const follows = await tx.follow.findMany({
+      where: { followerId: viewerId, followeeId: { in: uniqueIds } },
+      select: { followeeId: true },
+    });
+    return new Set(follows.map((f) => f.followeeId));
+  }
+
   private feedKey(userId: string): string {
     return `feed:${userId}`;
   }

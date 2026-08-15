@@ -35,15 +35,27 @@ export class FeedService {
     const merged = mergeFeedEntries(fannedOutEntries, celebrityEntries, limit);
     const postIds = merged.map((entry) => entry.postId);
 
-    const [posts, likeCounts] = await Promise.all([
+    const [posts, likeCounts, likedPostIds] = await Promise.all([
       this.feedRepository.findManyByIds(this.prisma, postIds),
       this.feedRepository.getLikeCounts(postIds),
+      this.feedRepository.getLikedPostIds(this.prisma, viewerId, postIds),
     ]);
     const postsById = new Map(posts.map((post) => [post.id, post]));
+    const authorIds = posts.map((post) => post.authorId);
+    const followedAuthorIds = await this.feedRepository.getFollowedAuthorIds(
+      this.prisma,
+      viewerId,
+      authorIds,
+    );
 
     const items = merged.map((entry) => {
       const post = postsById.get(entry.postId)!;
-      return PostResponse.from(post, likeCounts.get(entry.postId) ?? 0);
+      return PostResponse.from(
+        post,
+        likeCounts.get(entry.postId) ?? 0,
+        likedPostIds.has(entry.postId),
+        followedAuthorIds.has(post.authorId),
+      );
     });
 
     const hasMore =

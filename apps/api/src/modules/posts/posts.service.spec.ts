@@ -51,6 +51,7 @@ describe('PostsService', () => {
     content: 'hi',
     parentId: null,
     depth: 0,
+    replyCount: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     author,
@@ -87,6 +88,9 @@ describe('PostsService', () => {
       create: jest.fn(),
       findById: jest.fn(),
       findDepthById: jest.fn(),
+      incrementReplyCount: jest.fn(),
+      findReplies: jest.fn(),
+      findFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<PostsRepository>;
 
     hashtagsRepository = {
@@ -101,6 +105,8 @@ describe('PostsService', () => {
       increment: jest.fn(),
       decrement: jest.fn(),
       getCount: jest.fn().mockResolvedValue(0),
+      getCounts: jest.fn().mockResolvedValue(new Map()),
+      findLikedPostIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<LikesRepository>;
 
     mediaService = {
@@ -303,6 +309,12 @@ describe('PostsService', () => {
       expect(fanoutQueue.enqueueFanout).not.toHaveBeenCalled();
     });
 
+    it('increments the parent post reply count inside the transaction', async () => {
+      await postsService.createReply('user-1', 'parent-1', { content: 'hi' });
+
+      expect(postsRepository.incrementReplyCount).toHaveBeenCalledWith(tx, 'parent-1');
+    });
+
     it('creates a REPLY notification for the parent post author and enqueues its delivery', async () => {
       notificationsRepository.createIfNotSelf.mockResolvedValue({
         id: 'notification-1',
@@ -329,6 +341,105 @@ describe('PostsService', () => {
       await postsService.createReply('user-1', 'parent-1', { content: 'hi #foo' });
 
       expect(trendingService.recordUsage).toHaveBeenCalledWith(['foo']);
+    });
+  });
+
+  describe('getPost', () => {
+    it('throws NotFoundException when the post does not exist', async () => {
+      postsRepository.findById.mockResolvedValue(null);
+
+      await expect(postsService.getPost('user-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('sets isLiked true when the viewer has liked the post', async () => {
+      likesRepository.getCount.mockResolvedValue(5);
+      likesRepository.findLikedPostIds.mockResolvedValue(new Set(['post-1']));
+
+      const result = await postsService.getPost('user-1', 'post-1');
+
+      expect(likesRepository.findLikedPostIds).toHaveBeenCalledWith(prisma, 'user-1', ['post-1']);
+      expect(result.likeCount).toBe(5);
+      expect(result.isLiked).toBe(true);
+    });
+
+    it('sets isLiked false when the viewer has not liked the post', async () => {
+      likesRepository.findLikedPostIds.mockResolvedValue(new Set());
+
+      const result = await postsService.getPost('user-1', 'post-1');
+
+      expect(result.isLiked).toBe(false);
+    });
+
+    it('sets isFollowing true when the viewer already follows the author', async () => {
+      postsRepository.findFollowedAuthorIds.mockResolvedValue(new Set(['user-1']));
+
+      const result = await postsService.getPost('viewer-1', 'post-1');
+
+      expect(postsRepository.findFollowedAuthorIds).toHaveBeenCalledWith(prisma, 'viewer-1', [
+        'user-1',
+      ]);
+      expect(result.isFollowing).toBe(true);
+    });
+
+    it('sets isFollowing false when the viewer does not follow the author', async () => {
+      postsRepository.findFollowedAuthorIds.mockResolvedValue(new Set());
+
+      const result = await postsService.getPost('viewer-1', 'post-1');
+
+      expect(result.isFollowing).toBe(false);
+    });
+  });
+
+  describe('getReplies', () => {
+    const reply = { ...createdPost, id: 'reply-1', parentId: 'parent-1', depth: 1 };
+
+    beforeEach(() => {
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'parent-author-1' });
+      postsRepository.findReplies.mockResolvedValue([reply] as never);
+    });
+
+    it('throws NotFoundException when the parent post does not exist', async () => {
+      postsRepository.findDepthById.mockResolvedValue(null);
+
+      await expect(postsService.getReplies('user-1', 'missing', undefined, 20)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns replies with per-reply like counts and isLiked flags', async () => {
+      likesRepository.getCounts.mockResolvedValue(new Map([['reply-1', 3]]));
+      likesRepository.findLikedPostIds.mockResolvedValue(new Set(['reply-1']));
+
+      const result = await postsService.getReplies('user-1', 'parent-1', undefined, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].likeCount).toBe(3);
+      expect(result.items[0].isLiked).toBe(true);
+    });
+
+    it('returns isFollowing per reply author', async () => {
+      postsRepository.findFollowedAuthorIds.mockResolvedValue(new Set(['user-1']));
+
+      const result = await postsService.getReplies('viewer-1', 'parent-1', undefined, 20);
+
+      expect(postsRepository.findFollowedAuthorIds).toHaveBeenCalledWith(prisma, 'viewer-1', [
+        'user-1',
+      ]);
+      expect(result.items[0].isFollowing).toBe(true);
+    });
+
+    it('returns a null nextCursor when fewer than a full page came back', async () => {
+      const result = await postsService.getReplies('user-1', 'parent-1', undefined, 20);
+
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('returns an encoded nextCursor when a full page came back', async () => {
+      postsRepository.findReplies.mockResolvedValue([reply] as never);
+
+      const result = await postsService.getReplies('user-1', 'parent-1', undefined, 1);
+
+      expect(result.nextCursor).not.toBeNull();
     });
   });
 

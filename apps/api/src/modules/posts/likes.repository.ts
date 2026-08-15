@@ -43,6 +43,33 @@ export class LikesRepository {
     await this.redis.decr(this.likeCountKey(postId));
   }
 
+  async getCounts(postIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (postIds.length === 0) {
+      return counts;
+    }
+
+    const values = await this.redis.mget(...postIds.map((id) => this.likeCountKey(id)));
+    postIds.forEach((id, index) => counts.set(id, Number(values[index] ?? 0)));
+    return counts;
+  }
+
+  async findLikedPostIds(
+    tx: PrismaClientOrTx,
+    userId: string,
+    postIds: string[],
+  ): Promise<Set<string>> {
+    if (postIds.length === 0) {
+      return new Set();
+    }
+
+    const likes = await tx.like.findMany({
+      where: { userId, postId: { in: postIds } },
+      select: { postId: true },
+    });
+    return new Set(likes.map((like) => like.postId));
+  }
+
   private likeCountKey(postId: string): string {
     return `post:${postId}:likes`;
   }

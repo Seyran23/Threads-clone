@@ -1,0 +1,2 @@
+export const DEFAULT_REPLIES_PAGE_SIZE = 20;
+export const MAX_REPLIES_PAGE_SIZE = 50;
