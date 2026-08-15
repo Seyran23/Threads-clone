@@ -23,7 +23,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
+    "seed:clean": "ts-node -r tsconfig-paths/register prisma/teardown-seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1079.0",
