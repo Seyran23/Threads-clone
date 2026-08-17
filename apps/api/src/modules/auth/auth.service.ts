@@ -41,11 +41,11 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findByUsername(dto.username);
 
     if (!user || !(await argon2.verify(user.passwordHash, dto.password))) {
-      this.logger.warn({ email: dto.email }, 'Login failed: invalid credentials');
-      throw new UnauthorizedException('Invalid email or password');
+      this.logger.warn({ username: dto.username }, 'Login failed: invalid credentials');
+      throw new UnauthorizedException('Invalid username or password');
     }
 
     const tokens = await this.issueTokens(user.id, randomUUID());

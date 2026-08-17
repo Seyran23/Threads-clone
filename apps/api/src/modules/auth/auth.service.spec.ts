@@ -24,6 +24,7 @@ describe('AuthService', () => {
     email: 'alice@example.com',
     username: 'alice',
     passwordHash: 'hashed-password',
+    avatarUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -32,6 +33,7 @@ describe('AuthService', () => {
     usersService = {
       createUser: jest.fn(),
       findByEmail: jest.fn(),
+      findByUsername: jest.fn(),
       findById: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
@@ -137,28 +139,28 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('throws when no user exists for the email', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
+    it('throws when no user exists for the username', async () => {
+      usersService.findByUsername.mockResolvedValue(null);
 
-      await expect(
-        authService.login({ email: 'nobody@example.com', password: 'x' }),
-      ).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('throws when the password does not match', async () => {
-      usersService.findByEmail.mockResolvedValue(user);
-      jest.mocked(argon2.verify).mockResolvedValue(false as never);
-
-      await expect(authService.login({ email: user.email, password: 'wrong' })).rejects.toThrow(
+      await expect(authService.login({ username: 'nobody', password: 'x' })).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
+    it('throws when the password does not match', async () => {
+      usersService.findByUsername.mockResolvedValue(user);
+      jest.mocked(argon2.verify).mockResolvedValue(false as never);
+
+      await expect(
+        authService.login({ username: user.username, password: 'wrong' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
     it('returns tokens and the user on success', async () => {
-      usersService.findByEmail.mockResolvedValue(user);
+      usersService.findByUsername.mockResolvedValue(user);
       jest.mocked(argon2.verify).mockResolvedValue(true as never);
 
-      const result = await authService.login({ email: user.email, password: 'correct' });
+      const result = await authService.login({ username: user.username, password: 'correct' });
 
       expect(result.user).toBe(user);
       expect(result.tokens.accessToken).toBe('access-token');
