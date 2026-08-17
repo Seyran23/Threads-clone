@@ -21,7 +21,7 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
   });
 
   return (
-    <div className="mx-auto max-w-xl pb-20">
+    <div className="mx-auto w-full max-w-xl pb-20">
       <div className="flex items-center gap-3 border-b border-border p-4">
         <Link href="/" aria-label="Back to feed">
           <ArrowLeft className="size-5" />
@@ -33,7 +33,12 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
       {postQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load this post.</p>
       )}
-      {postQuery.data && <PostCard post={postQuery.data} />}
+      {postQuery.data && (
+        <PostCard
+          post={postQuery.data}
+          threadLine={repliesQuery.data && repliesQuery.data.items.length > 0 ? 'start' : undefined}
+        />
+      )}
 
       {repliesQuery.isLoading && (
         <p className="p-4 text-sm text-muted-foreground">Loading replies…</p>
@@ -44,13 +49,18 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
       {repliesQuery.data && repliesQuery.data.items.length === 0 && (
         <p className="p-8 text-center text-sm text-muted-foreground">No replies yet.</p>
       )}
-      {repliesQuery.data?.items.map((reply) => (
-        <PostCard key={reply.id} post={reply} />
+      {repliesQuery.data?.items.map((reply, index) => (
+        <PostCard
+          key={reply.id}
+          post={reply}
+          compact
+          threadLine={index === repliesQuery.data.items.length - 1 ? 'end' : 'middle'}
+        />
       ))}
 
       {postQuery.data && (
         <div className="fixed inset-x-0 bottom-0 z-10 bg-background">
-          <div className="mx-auto max-w-xl">
+          <div className="mx-auto w-full max-w-xl">
             <PostComposer parentId={postId} placeholder="Post your reply" />
           </div>
         </div>
