@@ -36,15 +36,16 @@ export class BlocksRepository {
   async findBlockedUsers(
     tx: PrismaClientOrTx,
     blockerId: string,
-  ): Promise<{ id: string; username: string; blockedAt: Date }[]> {
+  ): Promise<{ id: string; username: string; avatarUrl: string | null; blockedAt: Date }[]> {
     const blocks = await tx.block.findMany({
       where: { blockerId },
       orderBy: { createdAt: 'desc' },
-      include: { blocked: { select: { id: true, username: true } } },
+      include: { blocked: { select: { id: true, username: true, avatarUrl: true } } },
     });
     return blocks.map((b) => ({
       id: b.blocked.id,
       username: b.blocked.username,
+      avatarUrl: b.blocked.avatarUrl,
       blockedAt: b.createdAt,
     }));
   }

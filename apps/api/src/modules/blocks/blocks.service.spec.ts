@@ -110,7 +110,7 @@ describe('BlocksService', () => {
   describe('getBlockedUsers', () => {
     it('delegates to the repository for the blocker', async () => {
       blocksRepository.findBlockedUsers.mockResolvedValue([
-        { id: 'user-2', username: 'b', blockedAt: new Date() },
+        { id: 'user-2', username: 'b', avatarUrl: null, blockedAt: new Date() },
       ]);
 
       const result = await blocksService.getBlockedUsers('user-1');
