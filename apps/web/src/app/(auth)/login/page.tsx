@@ -41,9 +41,11 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" autoComplete="email" {...register('email')} />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" type="text" autoComplete="username" {...register('username')} />
+              {errors.username && (
+                <p className="text-sm text-destructive">{errors.username.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">

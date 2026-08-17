@@ -3,4 +3,11 @@ export const queryKeys = {
   feed: ['feed'] as const,
   post: (id: string) => ['post', id] as const,
   replies: (parentId: string) => ['replies', parentId] as const,
+  profile: (username: string) => ['profile', username] as const,
+  userPosts: (username: string) => ['userPosts', username] as const,
+  search: (q: string) => ['search', q] as const,
+  notifications: ['notifications'] as const,
+  hasNewNotification: ['hasNewNotification'] as const,
+  suggestedUsers: (userId: string) => ['suggestedUsers', userId] as const,
+  savedPosts: ['savedPosts'] as const,
 };
