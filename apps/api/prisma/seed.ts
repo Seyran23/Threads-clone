@@ -1,3 +1,5 @@
+import { deflateSync } from 'node:zlib';
+
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from '@/app.module';
@@ -7,23 +9,24 @@ import { AuthService } from '@/modules/auth/auth.service';
 import { FeedRepository } from '@/modules/feed/feed.repository';
 import { FollowsService } from '@/modules/follows/follows.service';
 import { PostsService } from '@/modules/posts/posts.service';
+import { UsersService } from '@/modules/users/users.service';
 
 const SEED_PASSWORD = 'Passw0rd!2345';
-const SEED_PREFIX = 'seed_';
+const SEED_EMAIL_DOMAIN = 'seed.local';
 
 const USERNAMES = [
-  'alice',
-  'bob',
-  'carol',
-  'dave',
-  'erin',
-  'frank',
-  'grace',
-  'heidi',
-  'ivan',
-  'judy',
-  'mallory',
-  'oscar',
+  'nova_ember',
+  'pixel_drift',
+  'cosmic_ray',
+  'echo_static',
+  'neon_wolf',
+  'quiet_storm',
+  'wild_orbit',
+  'lucid_byte',
+  'paper_moon',
+  'iron_finch',
+  'velvet_fox',
+  'amber_tide',
 ];
 
 const POST_TEMPLATES = [
@@ -67,14 +70,82 @@ const REPLY_TEMPLATES = [
   'Had the exact same bug last week',
 ];
 
-const IMAGE_COLORS: Record<string, string> = {
-  red: 'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAtUlEQVR4nO3QUQkAIBTAQDO9/lEMYwV/ZAgHCzBu7RldtvKDj4IFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwULVh4sWLDyYMGClQcLFqw8WLBg5cGCBSsPFixYebBgwcqDBQtWHixYsPJgwYKVBwsWrDxYsGDlwYIFKw8WLFh5sGDByoMFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwXrTQfr89bRBdCQ6AAAAABJRU5ErkJggg==',
-  blue: 'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAtUlEQVR4nO3QQQkAIADAQDMZx+yGsYIfGcLBAowbc21dNvKDj4IFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwULVh4sWLDyYMGClQcLFqw8WLBg5cGCBSsPFixYebBgwcqDBQtWHixYsPJgwYKVBwsWrDxYsGDlwYIFKw8WLFh5sGDByoMFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwXrTQf4MPGrUiGTZAAAAABJRU5ErkJggg==',
-  green:
-    'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAtUlEQVR4nO3QQQkAIADAQDMZx5wGtIIfGcLBAowbcy9dNvKDj4IFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwULVh4sWLDyYMGClQcLFqw8WLBg5cGCBSsPFixYebBgwcqDBQtWHixYsPJgwYKVBwsWrDxYsGDlwYIFKw8WLFh5sGDByoMFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwXrTQfe89bRzhwF0gAAAABJRU5ErkJggg==',
-  orange:
-    'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAtUlEQVR4nO3QQQkAIADAQOMY1pzmsIIfGcLBAowbe01dNvKDj4IFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwULVh4sWLDyYMGClQcLFqw8WLBg5cGCBSsPFixYebBgwcqDBQtWHixYsPJgwYKVBwsWrDxYsGDlwYIFKw8WLFh5sGDByoMFC1YeLFiw8mDBgpUHCxasPFiwYOXBggUrDxYsWHmwYMHKgwXrTQeWmJNDcs4f+AAAAABJRU5ErkJggg==',
-};
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[n] = c;
+  }
+  return table;
+})();
+
+function crc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of buf) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, 'ascii');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([length, typeBuf, data, crc]);
+}
+
+/** Builds a valid solid-color PNG from scratch, so seed images/avatars don't need a canvas dependency or hardcoded base64 blobs. */
+function makeSolidPng(size: number, [r, g, b]: [number, number, number]): Buffer {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(size, 0);
+  ihdrData.writeUInt32BE(size, 4);
+  ihdrData[8] = 8; // bit depth
+  ihdrData[9] = 2; // color type: RGB
+  const ihdr = pngChunk('IHDR', ihdrData);
+
+  const rowBytes = size * 3;
+  const raw = Buffer.alloc((rowBytes + 1) * size);
+  for (let y = 0; y < size; y++) {
+    const rowStart = y * (rowBytes + 1);
+    raw[rowStart] = 0; // filter type: none
+    for (let x = 0; x < size; x++) {
+      const pixelStart = rowStart + 1 + x * 3;
+      raw[pixelStart] = r;
+      raw[pixelStart + 1] = g;
+      raw[pixelStart + 2] = b;
+    }
+  }
+  const idat = pngChunk('IDAT', deflateSync(raw));
+  const iend = pngChunk('IEND', Buffer.alloc(0));
+
+  return Buffer.concat([signature, ihdr, idat, iend]);
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -107,19 +178,29 @@ async function main() {
   const authService = app.get(AuthService);
   const postsService = app.get(PostsService);
   const followsService = app.get(FollowsService);
+  const usersService = app.get(UsersService);
   const s3Service = app.get(S3Service);
   const feedRepository = app.get(FeedRepository);
   const prisma = app.get(PrismaService);
 
   console.log('Removing any existing seed data...');
-  await prisma.user.deleteMany({ where: { username: { startsWith: SEED_PREFIX } } });
+  await prisma.user.deleteMany({ where: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } });
 
-  console.log(`Creating ${USERNAMES.length} users...`);
+  console.log(`Creating ${USERNAMES.length} users with profile photos...`);
   const users: { id: string; username: string; email: string }[] = [];
-  for (const name of USERNAMES) {
-    const username = `${SEED_PREFIX}${name}`;
-    const email = `${SEED_PREFIX}${name}@example.com`;
+  for (const [index, username] of USERNAMES.entries()) {
+    const email = `${username}@${SEED_EMAIL_DOMAIN}`;
     const { user } = await authService.register({ email, username, password: SEED_PASSWORD });
+
+    const hue = Math.round((index / USERNAMES.length) * 360);
+    const avatarKey = `avatars/${user.id}/seed-avatar.png`;
+    await s3Service.putObject(
+      avatarKey,
+      makeSolidPng(256, hslToRgb(hue, 0.55, 0.55)),
+      'image/png',
+    );
+    await usersService.updateProfile(user.id, { avatarKey });
+
     users.push({ id: user.id, username, email });
   }
 
@@ -140,11 +221,11 @@ async function main() {
     }
   }
 
-  console.log('Creating posts (some with real images)...');
-  const imageEntries = Object.entries(IMAGE_COLORS);
+  console.log('Creating posts (many with real images)...');
   const postCount = 50;
+  const imagePostCount = 16;
   const imagePostIndexes = new Set(
-    shuffle(Array.from({ length: postCount }, (_, i) => i)).slice(0, imageEntries.length),
+    shuffle(Array.from({ length: postCount }, (_, i) => i)).slice(0, imagePostCount),
   );
 
   const posts: {
@@ -153,18 +234,23 @@ async function main() {
     createdAt: Date;
   }[] = [];
 
-  let imageIndex = 0;
   for (let i = 0; i < postCount; i++) {
     const author = i % 5 === 0 ? alice : users[randomInt(0, users.length - 1)];
     const content = `${POST_TEMPLATES[i % POST_TEMPLATES.length]} (${i + 1})`;
 
     let mediaKeys: string[] | undefined;
     if (imagePostIndexes.has(i)) {
-      const [colorName, base64] = imageEntries[imageIndex % imageEntries.length];
-      imageIndex++;
-      const key = `media/${author.id}/seed-${colorName}-${i}.png`;
-      await s3Service.putObject(key, Buffer.from(base64, 'base64'), 'image/png');
-      mediaKeys = [key];
+      const numImages = Math.random() < 0.25 ? 2 : 1;
+      mediaKeys = [];
+      for (let n = 0; n < numImages; n++) {
+        const key = `media/${author.id}/seed-post-${i}-${n}.png`;
+        await s3Service.putObject(
+          key,
+          makeSolidPng(480, hslToRgb(randomInt(0, 359), 0.55, 0.55)),
+          'image/png',
+        );
+        mediaKeys.push(key);
+      }
     }
 
     const post = await postsService.createPost(author.id, { content, mediaKeys });

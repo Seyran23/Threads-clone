@@ -2,13 +2,13 @@ import Redis from 'ioredis';
 
 import { PrismaClient } from '../src/generated/prisma';
 
-const SEED_PREFIX = 'seed_';
+const SEED_EMAIL_DOMAIN = 'seed.local';
 
 async function main() {
   const prisma = new PrismaClient();
 
   const users = await prisma.user.findMany({
-    where: { username: { startsWith: SEED_PREFIX } },
+    where: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } },
     select: { id: true },
   });
   const userIds = users.map((u) => u.id);
@@ -41,8 +41,9 @@ async function main() {
 
   console.log('Cleared associated Redis feed and like-count keys.');
   console.log(
-    'Note: any real S3 objects uploaded by the seed script (media/<userId>/seed-*.png) are ' +
-      'not deleted here — the app IAM user has no delete permission on the bucket.',
+    'Note: any real S3 objects uploaded by the seed script (media/<userId>/seed-*.png and ' +
+      'avatars/<userId>/seed-avatar.png) are not deleted here — the app IAM user has no ' +
+      'delete permission on the bucket.',
   );
 
   await redis.quit();
