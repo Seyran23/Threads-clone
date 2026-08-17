@@ -1,4 +1,4 @@
-import type { LikeResult, Post, RepliesPage } from '@threads-clone/shared-types';
+import type { LikeResult, Post, RepliesPage, ReportReason } from '@threads-clone/shared-types';
 
 import { apiFetch } from './client';
 import type { CreatePostInput, GetRepliesParams } from './posts.types';
@@ -43,4 +43,8 @@ export function savePost(id: string): Promise<void> {
 
 export function unsavePost(id: string): Promise<void> {
   return apiFetch<void>(`/posts/${id}/save`, { method: 'DELETE' });
+}
+
+export function reportPost(id: string, reason: ReportReason): Promise<void> {
+  return apiFetch<void>(`/posts/${id}/report`, { method: 'POST', body: { reason } });
 }

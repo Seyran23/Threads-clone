@@ -7,6 +7,7 @@ export * from './graph';
 export * from './media';
 export * from './notification';
 export * from './post';
+export * from './report';
 export * from './search';
 export * from './user';
 export * from './user-profile';

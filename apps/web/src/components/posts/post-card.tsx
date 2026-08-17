@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bookmark,
   Check,
+  Flag,
   Heart,
   Link as LinkIcon,
   MessageCircle,
@@ -36,6 +37,8 @@ import {
 } from '@/lib/utils/optimistic-post-update';
 import { formatRelativeTime } from '@/lib/utils/relative-time';
 
+import { ReportPostDialog } from './report-post-dialog';
+
 interface PostCardProps {
   post: Post;
   compact?: boolean;
@@ -48,6 +51,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
   const { data: currentUser } = useCurrentUser();
   const isOwnPost = currentUser?.user.id === post.author.id;
   const [copied, setCopied] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
   const likeMutation = useMutation({
     mutationFn: () => (post.isLiked ? unlikePost(post.id) : likePost(post.id)),
@@ -202,6 +206,12 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
                   {copied ? <Check className="size-4" /> : <LinkIcon className="size-4" />}
                   {copied ? 'Copied!' : 'Copy link'}
                 </DropdownMenuItem>
+                {!isOwnPost && (
+                  <DropdownMenuItem variant="destructive" onClick={() => setReportDialogOpen(true)}>
+                    <Flag className="size-4" />
+                    Report
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -279,6 +289,12 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
           </span>
         </div>
       </div>
+
+      <ReportPostDialog
+        postId={post.id}
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+      />
     </div>
   );
 }
