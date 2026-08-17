@@ -1,13 +1,21 @@
 'use client';
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, MoreHorizontal, UserX } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { PostCard } from '@/components/posts/post-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { blockUser } from '@/lib/api/blocks';
 import { followUser, unfollowUser } from '@/lib/api/follows';
 import { getUserPosts, getUserProfile } from '@/lib/api/users';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
@@ -23,6 +31,7 @@ interface ProfileViewProps {
 }
 
 export function ProfileView({ username }: ProfileViewProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const [copied, setCopied] = useState(false);
@@ -97,6 +106,19 @@ export function ProfileView({ username }: ProfileViewProps) {
     },
   });
 
+  const blockMutation = useMutation({
+    mutationFn: () => {
+      const profile = profileQuery.data;
+      if (!profile) {
+        throw new Error('Profile not loaded');
+      }
+      return blockUser(profile.id);
+    },
+    onSuccess: () => {
+      router.push('/');
+    },
+  });
+
   const copyProfileLink = async () => {
     await navigator.clipboard.writeText(`${window.location.origin}/profile/${username}`);
     setCopied(true);
@@ -164,14 +186,24 @@ export function ProfileView({ username }: ProfileViewProps) {
                 >
                   {profileQuery.data.isFollowing ? 'Following' : 'Follow'}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => void copyProfileLink()}
-                  aria-label="Copy profile link"
-                >
-                  <LinkIcon className="size-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-accent"
+                    aria-label="More options"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => void copyProfileLink()}>
+                      <LinkIcon className="size-4" />
+                      {copied ? 'Copied!' : 'Copy profile link'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onClick={() => blockMutation.mutate()}>
+                      <UserX className="size-4" />
+                      Block
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
           </div>

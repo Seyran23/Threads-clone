@@ -1,5 +1,6 @@
 export * from './api-error';
 export * from './auth';
+export * from './block';
 export * from './feed';
 export * from './follow';
 export * from './graph';

@@ -79,6 +79,9 @@ export default function HomePage() {
               View profile
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push('/saved')}>Saved</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/blocked')}>
+              Blocked accounts
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {

@@ -10,4 +10,5 @@ export const queryKeys = {
   hasNewNotification: ['hasNewNotification'] as const,
   suggestedUsers: (userId: string) => ['suggestedUsers', userId] as const,
   savedPosts: ['savedPosts'] as const,
+  blockedUsers: ['blockedUsers'] as const,
 };
