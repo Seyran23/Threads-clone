@@ -36,3 +36,11 @@ export function likePost(id: string): Promise<LikeResult> {
 export function unlikePost(id: string): Promise<LikeResult> {
   return apiFetch<LikeResult>(`/posts/${id}/like`, { method: 'DELETE' });
 }
+
+export function savePost(id: string): Promise<void> {
+  return apiFetch<void>(`/posts/${id}/save`, { method: 'POST' });
+}
+
+export function unsavePost(id: string): Promise<void> {
+  return apiFetch<void>(`/posts/${id}/save`, { method: 'DELETE' });
+}

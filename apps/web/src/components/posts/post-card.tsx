@@ -1,29 +1,53 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, MessageCircle } from 'lucide-react';
+import {
+  Bookmark,
+  Check,
+  Heart,
+  Link as LinkIcon,
+  MessageCircle,
+  MoreHorizontal,
+  Repeat2,
+  Send,
+} from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import type { Post } from '@threads-clone/shared-types';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { followUser, unfollowUser } from '@/lib/api/follows';
-import { likePost, unlikePost } from '@/lib/api/posts';
+import { likePost, savePost, unlikePost, unsavePost } from '@/lib/api/posts';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
 import { cn } from '@/lib/utils';
-import { updateAuthorFollowInCaches, updatePostInCaches } from '@/lib/utils/optimistic-post-update';
+import {
+  removePostFromSavedPostsCache,
+  updateAuthorFollowInCaches,
+  updatePostInCaches,
+} from '@/lib/utils/optimistic-post-update';
 import { formatRelativeTime } from '@/lib/utils/relative-time';
 
 interface PostCardProps {
   post: Post;
+  compact?: boolean;
+  threadLine?: 'start' | 'middle' | 'end';
 }
 
-export function PostCard({ post }: PostCardProps) {
+export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const isOwnPost = currentUser?.user.id === post.author.id;
+  const [copied, setCopied] = useState(false);
 
   const likeMutation = useMutation({
     mutationFn: () => (post.isLiked ? unlikePost(post.id) : likePost(post.id)),
@@ -70,6 +94,30 @@ export function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const saveMutation = useMutation({
+    mutationFn: () => (post.isSaved ? unsavePost(post.id) : savePost(post.id)),
+    onMutate: () => {
+      const previous = post.isSaved;
+      updatePostInCaches(queryClient, post.id, (p) => ({ ...p, isSaved: !p.isSaved }));
+      if (previous) {
+        removePostFromSavedPostsCache(queryClient, post.id);
+      }
+      return previous;
+    },
+    onError: (_error, _vars, previous) => {
+      if (previous === undefined) {
+        return;
+      }
+      updatePostInCaches(queryClient, post.id, (p) => ({ ...p, isSaved: previous }));
+    },
+  });
+
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <div
       role="link"
@@ -80,34 +128,93 @@ export function PostCard({ post }: PostCardProps) {
           router.push(`/post/${post.id}`);
         }
       }}
-      className="flex cursor-pointer gap-3 border-b border-border p-4 hover:bg-muted/40"
+      className={cn(
+        'flex cursor-pointer gap-3 border-b border-border hover:bg-muted/40',
+        compact ? 'px-4 py-2.5' : 'p-4',
+      )}
     >
-      <Avatar size="lg">
-        <AvatarFallback>{post.author.username.slice(0, 1).toUpperCase()}</AvatarFallback>
-      </Avatar>
+      <Link
+        href={`/profile/${post.author.username}`}
+        onClick={(e) => e.stopPropagation()}
+        className="relative block self-stretch"
+      >
+        {threadLine && (
+          <div
+            aria-hidden="true"
+            className={cn(
+              'absolute left-1/2 w-0.5 -translate-x-1/2 bg-muted-foreground/30',
+              threadLine === 'start' && (compact ? 'top-8 bottom-0' : 'top-10 bottom-0'),
+              threadLine === 'middle' && 'top-0 bottom-0',
+              threadLine === 'end' && (compact ? 'top-0 h-8' : 'top-0 h-10'),
+            )}
+          />
+        )}
+        <Avatar size={compact ? 'default' : 'lg'} className="relative">
+          {post.author.avatarUrl && (
+            <AvatarImage src={post.author.avatarUrl} alt={`${post.author.username}'s avatar`} />
+          )}
+          <AvatarFallback>{post.author.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      </Link>
 
       <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex items-center gap-1.5 text-[15px]">
-          <span className="font-semibold">{post.author.username}</span>
+        <div className={cn('flex items-center gap-1.5', compact ? 'text-sm' : 'text-[15px]')}>
+          <Link
+            href={`/profile/${post.author.username}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-semibold hover:underline"
+          >
+            {post.author.username}
+          </Link>
           <span className="text-muted-foreground">· {formatRelativeTime(post.createdAt)}</span>
-          {!isOwnPost && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                followMutation.mutate();
-              }}
-              className={cn(
-                'ml-auto text-sm font-medium',
-                post.isFollowing ? 'text-muted-foreground' : 'text-primary',
-              )}
-            >
-              {post.isFollowing ? 'Following' : 'Follow'}
-            </button>
-          )}
+
+          <div className="ml-auto flex items-center gap-3">
+            {!isOwnPost && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  followMutation.mutate();
+                }}
+                className={cn(
+                  'text-sm font-medium',
+                  post.isFollowing ? 'text-muted-foreground' : 'text-primary',
+                )}
+              >
+                {post.isFollowing ? 'Following' : 'Follow'}
+              </button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="More options"
+              >
+                <MoreHorizontal className="size-5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={() => saveMutation.mutate()}>
+                  <Bookmark className={cn('size-4', post.isSaved && 'fill-current')} />
+                  {post.isSaved ? 'Unsave' : 'Save'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void copyLink()}>
+                  {copied ? <Check className="size-4" /> : <LinkIcon className="size-4" />}
+                  {copied ? 'Copied!' : 'Copy link'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">{post.content}</p>
+        <p
+          className={cn(
+            'whitespace-pre-wrap break-words leading-normal',
+            compact ? 'text-sm' : 'text-[15px]',
+          )}
+        >
+          {post.content}
+        </p>
 
         {post.media.length > 0 && (
           <div
@@ -127,7 +234,12 @@ export function PostCard({ post }: PostCardProps) {
           </div>
         )}
 
-        <div className="flex items-center gap-5 pt-1.5 text-muted-foreground">
+        <div
+          className={cn(
+            'flex items-center gap-5 text-muted-foreground',
+            compact ? 'pt-1' : 'pt-1.5',
+          )}
+        >
           <button
             type="button"
             onClick={(e) => {
@@ -140,7 +252,9 @@ export function PostCard({ post }: PostCardProps) {
             )}
             aria-label={post.isLiked ? 'Unlike' : 'Like'}
           >
-            <Heart className={cn('size-5.5', post.isLiked && 'fill-current')} />
+            <Heart
+              className={cn(compact ? 'size-5' : 'size-5.5', post.isLiked && 'fill-current')}
+            />
             {post.likeCount > 0 && post.likeCount}
           </button>
 
@@ -153,9 +267,16 @@ export function PostCard({ post }: PostCardProps) {
             className="flex items-center gap-1.5 text-sm transition-colors hover:text-foreground"
             aria-label="Reply"
           >
-            <MessageCircle className="size-5.5" />
+            <MessageCircle className={compact ? 'size-5' : 'size-5.5'} />
             {post.replyCount > 0 && post.replyCount}
           </button>
+
+          <span className="flex items-center gap-1.5 text-sm opacity-40" aria-hidden="true">
+            <Repeat2 className={compact ? 'size-5' : 'size-5.5'} />
+          </span>
+          <span className="flex items-center gap-1.5 text-sm opacity-40" aria-hidden="true">
+            <Send className={compact ? 'size-5' : 'size-5.5'} />
+          </span>
         </div>
       </div>
     </div>

@@ -33,6 +33,19 @@ function mapPosts(data: unknown, mapper: (post: Post) => Post): unknown {
   return data;
 }
 
+function filterPosts(data: unknown, predicate: (post: Post) => boolean): unknown {
+  if (isInfinitePages(data)) {
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({ ...page, items: page.items.filter(predicate) })),
+    };
+  }
+  if (isPage(data)) {
+    return { ...data, items: data.items.filter(predicate) };
+  }
+  return data;
+}
+
 export function updatePostInCaches(
   queryClient: QueryClient,
   postId: string,
@@ -45,6 +58,14 @@ export function updatePostInCaches(
   );
   queryClient.setQueriesData({ queryKey: ['feed'] }, (data) => mapPosts(data, patch));
   queryClient.setQueriesData({ queryKey: ['replies'] }, (data) => mapPosts(data, patch));
+  queryClient.setQueriesData({ queryKey: ['userPosts'] }, (data) => mapPosts(data, patch));
+  queryClient.setQueriesData({ queryKey: ['savedPosts'] }, (data) => mapPosts(data, patch));
+}
+
+export function removePostFromSavedPostsCache(queryClient: QueryClient, postId: string): void {
+  queryClient.setQueriesData({ queryKey: ['savedPosts'] }, (data) =>
+    filterPosts(data, (post) => post.id !== postId),
+  );
 }
 
 export function updateAuthorFollowInCaches(
@@ -60,4 +81,6 @@ export function updateAuthorFollowInCaches(
   );
   queryClient.setQueriesData({ queryKey: ['feed'] }, (data) => mapPosts(data, patch));
   queryClient.setQueriesData({ queryKey: ['replies'] }, (data) => mapPosts(data, patch));
+  queryClient.setQueriesData({ queryKey: ['userPosts'] }, (data) => mapPosts(data, patch));
+  queryClient.setQueriesData({ queryKey: ['savedPosts'] }, (data) => mapPosts(data, patch));
 }
