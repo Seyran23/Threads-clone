@@ -11,6 +11,7 @@ import { LikesRepository } from './likes.repository';
 import { PostsController } from './posts.controller';
 import { PostsRepository } from './posts.repository';
 import { PostsService } from './posts.service';
+import { ReportsRepository } from './reports.repository';
 import { SavedPostsRepository } from './saved-posts.repository';
 
 @Module({
@@ -22,6 +23,7 @@ import { SavedPostsRepository } from './saved-posts.repository';
     HashtagsRepository,
     LikesRepository,
     SavedPostsRepository,
+    ReportsRepository,
     JwtAuthGuard,
   ],
   exports: [PostsRepository, LikesRepository, SavedPostsRepository],

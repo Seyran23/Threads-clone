@@ -16,10 +16,15 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from '@/common/throttler/app-throttler.guard';
-import { LIKE_THROTTLE, POST_CREATE_THROTTLE } from '@/common/throttler/throttler.constants';
+import {
+  LIKE_THROTTLE,
+  POST_CREATE_THROTTLE,
+  REPORT_THROTTLE,
+} from '@/common/throttler/throttler.constants';
 
 import { CreatePostDto } from './dto/create-post.dto';
 import { GetRepliesQueryDto } from './dto/get-replies-query.dto';
+import { ReportPostDto } from './dto/report-post.dto';
 import { PostsService } from './posts.service';
 import { LikeResponse } from './response/like.response';
 import { PostResponse } from './response/post.response';
@@ -99,5 +104,17 @@ export class PostsController {
   @Throttle(LIKE_THROTTLE)
   unsavePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<void> {
     return this.postsService.unsavePost(user.id, id);
+  }
+
+  @Post(':id/report')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(REPORT_THROTTLE)
+  reportPost(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: ReportPostDto,
+  ): Promise<void> {
+    return this.postsService.reportPost(user.id, id, dto);
   }
 }

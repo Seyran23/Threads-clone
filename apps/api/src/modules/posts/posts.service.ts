@@ -17,9 +17,11 @@ import { NotificationsRepository } from '@/modules/notifications/notifications.r
 import { TrendingService } from '@/modules/trending/trending.service';
 
 import { CreatePostDto } from './dto/create-post.dto';
+import { ReportPostDto } from './dto/report-post.dto';
 import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
 import { PostsRepository } from './posts.repository';
+import { ReportsRepository } from './reports.repository';
 import { LikeResponse } from './response/like.response';
 import { PostResponse, PostWithRelations } from './response/post.response';
 import { RepliesResponse } from './response/replies.response';
@@ -35,6 +37,7 @@ export class PostsService {
     private readonly hashtagsRepository: HashtagsRepository,
     private readonly likesRepository: LikesRepository,
     private readonly savedPostsRepository: SavedPostsRepository,
+    private readonly reportsRepository: ReportsRepository,
     private readonly mediaService: MediaService,
     private readonly mediaRepository: MediaRepository,
     private readonly imageProcessingQueue: ImageProcessingQueue,
@@ -288,6 +291,25 @@ export class PostsService {
   async unsavePost(userId: string, postId: string): Promise<void> {
     await this.savedPostsRepository.unsave(this.prisma, userId, postId);
     this.logger.info({ postId, userId }, 'Post unsaved');
+  }
+
+  async reportPost(reporterId: string, postId: string, dto: ReportPostDto): Promise<void> {
+    const post = await this.postsRepository.findDepthById(this.prisma, postId);
+    if (!post) {
+      throw new NotFoundException('Post', postId);
+    }
+
+    if (reporterId === post.authorId) {
+      throw new ConflictException('You cannot report your own post');
+    }
+
+    const existing = await this.reportsRepository.findOne(this.prisma, reporterId, postId);
+    if (existing) {
+      throw new ConflictException('You have already reported this post');
+    }
+
+    await this.reportsRepository.create(this.prisma, reporterId, postId, dto.reason);
+    this.logger.info({ postId, reporterId, reason: dto.reason }, 'Post reported');
   }
 
   private async resolveHashtagIds(tx: PrismaClientOrTx, content: string): Promise<string[]> {

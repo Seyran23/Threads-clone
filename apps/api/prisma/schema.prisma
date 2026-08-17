@@ -28,6 +28,7 @@ model User {
   notificationsSent     Notification[] @relation("NotificationActor")
   blocksInitiated       Block[]        @relation("Blocker")
   blocksReceived        Block[]        @relation("Blocked")
+  reportsSubmitted      Report[]
 
   @@map("users")
 }
@@ -48,6 +49,29 @@ model Block {
 enum FanoutStatus {
   PENDING
   COMPLETED
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  VIOLENCE
+  NUDITY
+  OTHER
+}
+
+model Report {
+  id         String       @id @default(uuid())
+  reporterId String       @map("reporter_id")
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  postId     String       @map("post_id")
+  post       Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reason     ReportReason
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([reporterId, postId])
+  @@index([postId])
+  @@map("reports")
 }
 
 model Post {
@@ -71,6 +95,7 @@ model Post {
   media         Media[]
   notifications Notification[]
   savedBy       SavedPost[]
+  reports       Report[]
 
   @@index([authorId])
   @@index([parentId])

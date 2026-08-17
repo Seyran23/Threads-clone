@@ -18,6 +18,7 @@ import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
 import { PostsRepository } from './posts.repository';
 import { PostsService } from './posts.service';
+import { ReportsRepository } from './reports.repository';
 import { SavedPostsRepository } from './saved-posts.repository';
 
 describe('PostsService', () => {
@@ -27,6 +28,7 @@ describe('PostsService', () => {
   let hashtagsRepository: jest.Mocked<HashtagsRepository>;
   let likesRepository: jest.Mocked<LikesRepository>;
   let savedPostsRepository: jest.Mocked<SavedPostsRepository>;
+  let reportsRepository: jest.Mocked<ReportsRepository>;
   let mediaService: jest.Mocked<MediaService>;
   let mediaRepository: jest.Mocked<MediaRepository>;
   let imageProcessingQueue: jest.Mocked<ImageProcessingQueue>;
@@ -120,6 +122,11 @@ describe('PostsService', () => {
       findByUser: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SavedPostsRepository>;
 
+    reportsRepository = {
+      create: jest.fn(),
+      findOne: jest.fn(),
+    } as unknown as jest.Mocked<ReportsRepository>;
+
     mediaService = {
       assertOwnedByUser: jest.fn(),
       getPublicUrl: jest.fn((key: string) => `https://public/${key}`),
@@ -162,6 +169,7 @@ describe('PostsService', () => {
       hashtagsRepository,
       likesRepository,
       savedPostsRepository,
+      reportsRepository,
       mediaService,
       mediaRepository,
       imageProcessingQueue,
@@ -597,6 +605,55 @@ describe('PostsService', () => {
       await postsService.unsavePost('user-1', 'post-1');
 
       expect(savedPostsRepository.unsave).toHaveBeenCalledWith(prisma, 'user-1', 'post-1');
+    });
+  });
+
+  describe('reportPost', () => {
+    beforeEach(() => {
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'post-author-1' });
+      reportsRepository.findOne.mockResolvedValue(null);
+    });
+
+    it('throws NotFoundException when the post does not exist', async () => {
+      postsRepository.findDepthById.mockResolvedValue(null);
+
+      await expect(
+        postsService.reportPost('user-1', 'missing', { reason: 'SPAM' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(reportsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when reporting your own post', async () => {
+      await expect(
+        postsService.reportPost('post-author-1', 'post-1', { reason: 'SPAM' }),
+      ).rejects.toThrow(ConflictException);
+      expect(reportsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when you already reported this post', async () => {
+      reportsRepository.findOne.mockResolvedValue({
+        id: 'report-1',
+        reporterId: 'user-1',
+        postId: 'post-1',
+        reason: 'SPAM',
+        createdAt: new Date(),
+      });
+
+      await expect(postsService.reportPost('user-1', 'post-1', { reason: 'SPAM' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(reportsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the report', async () => {
+      await postsService.reportPost('user-1', 'post-1', { reason: 'HARASSMENT' });
+
+      expect(reportsRepository.create).toHaveBeenCalledWith(
+        prisma,
+        'user-1',
+        'post-1',
+        'HARASSMENT',
+      );
     });
   });
 });
