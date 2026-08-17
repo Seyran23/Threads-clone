@@ -68,6 +68,15 @@ export function removePostFromSavedPostsCache(queryClient: QueryClient, postId: 
   );
 }
 
+export function removePostFromListCaches(queryClient: QueryClient, postId: string): void {
+  const predicate = (post: Post) => post.id !== postId;
+
+  queryClient.setQueriesData({ queryKey: ['feed'] }, (data) => filterPosts(data, predicate));
+  queryClient.setQueriesData({ queryKey: ['replies'] }, (data) => filterPosts(data, predicate));
+  queryClient.setQueriesData({ queryKey: ['userPosts'] }, (data) => filterPosts(data, predicate));
+  queryClient.setQueriesData({ queryKey: ['savedPosts'] }, (data) => filterPosts(data, predicate));
+}
+
 export function updateAuthorFollowInCaches(
   queryClient: QueryClient,
   authorId: string,

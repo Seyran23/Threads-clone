@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import type { ReportReason } from '@threads-clone/shared-types';
@@ -16,6 +16,7 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { reportPost } from '@/lib/api/posts';
 import { cn } from '@/lib/utils';
+import { removePostFromListCaches } from '@/lib/utils/optimistic-post-update';
 
 const REASONS: { value: ReportReason; label: string }[] = [
   { value: 'SPAM', label: 'Spam' },
@@ -33,6 +34,7 @@ interface ReportPostDialogProps {
 }
 
 export function ReportPostDialog({ postId, open, onOpenChange }: ReportPostDialogProps) {
+  const queryClient = useQueryClient();
   const [reason, setReason] = useState<ReportReason | null>(null);
 
   const mutation = useMutation({
@@ -43,6 +45,7 @@ export function ReportPostDialog({ postId, open, onOpenChange }: ReportPostDialo
       return reportPost(postId, reason);
     },
     onSuccess: () => {
+      removePostFromListCaches(queryClient, postId);
       onOpenChange(false);
     },
   });
