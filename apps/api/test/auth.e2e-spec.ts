@@ -100,12 +100,12 @@ describe('Auth (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: user.email, password: user.password })
+      .send({ username: user.username, password: user.password })
       .expect(200);
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: user.email, password: 'WrongPassword123!' })
+      .send({ username: user.username, password: 'WrongPassword123!' })
       .expect(401);
   });
 
