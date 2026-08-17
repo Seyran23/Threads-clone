@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 
 import { SearchQueryDto } from './dto/search-query.dto';
@@ -15,7 +16,10 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  search(@Query() query: SearchQueryDto): Promise<SearchResultsResponse> {
-    return this.searchService.search(query.q, query.page, query.limit);
+  search(
+    @CurrentUser() user: { id: string },
+    @Query() query: SearchQueryDto,
+  ): Promise<SearchResultsResponse> {
+    return this.searchService.search(user.id, query.q, query.page, query.limit);
   }
 }

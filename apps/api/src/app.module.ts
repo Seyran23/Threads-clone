@@ -17,6 +17,7 @@ import { RedisModule } from '@/infrastructure/redis/redis.module';
 import { S3Module } from '@/infrastructure/s3/s3.module';
 import { SocketModule } from '@/infrastructure/socket/socket.module';
 import { AuthModule } from '@/modules/auth/auth.module';
+import { BlocksModule } from '@/modules/blocks/blocks.module';
 import { FeedModule } from '@/modules/feed/feed.module';
 import { FollowsModule } from '@/modules/follows/follows.module';
 import { GraphModule } from '@/modules/graph/graph.module';
@@ -25,6 +26,7 @@ import { NotificationsModule } from '@/modules/notifications/notifications.modul
 import { PostsModule } from '@/modules/posts/posts.module';
 import { SearchModule } from '@/modules/search/search.module';
 import { TrendingModule } from '@/modules/trending/trending.module';
+import { UsersModule } from '@/modules/users/users.module';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { TrendingModule } from '@/modules/trending/trending.module';
     GraphModule,
     PostsModule,
     FollowsModule,
+    UsersModule,
+    BlocksModule,
   ],
   controllers: [],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

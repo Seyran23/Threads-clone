@@ -20,7 +20,7 @@ describe('SearchService', () => {
   });
 
   it('returns empty results without querying when there are no usable search words', async () => {
-    const result = await searchService.search('&|!()', 1, 20);
+    const result = await searchService.search('viewer-1', '&|!()', 1, 20);
 
     expect(searchRepository.searchPosts).not.toHaveBeenCalled();
     expect(searchRepository.searchUsers).not.toHaveBeenCalled();
@@ -28,10 +28,22 @@ describe('SearchService', () => {
   });
 
   it('converts page/limit into a zero-based offset', async () => {
-    await searchService.search('seyran', 3, 20);
+    await searchService.search('viewer-1', 'seyran', 3, 20);
 
-    expect(searchRepository.searchPosts).toHaveBeenCalledWith(prisma, 'seyran:*', 20, 40);
-    expect(searchRepository.searchUsers).toHaveBeenCalledWith(prisma, 'seyran:*', 20, 40);
+    expect(searchRepository.searchPosts).toHaveBeenCalledWith(
+      prisma,
+      'viewer-1',
+      'seyran:*',
+      20,
+      40,
+    );
+    expect(searchRepository.searchUsers).toHaveBeenCalledWith(
+      prisma,
+      'viewer-1',
+      'seyran:*',
+      20,
+      40,
+    );
   });
 
   it('maps post rows into the lightweight search-result shape', async () => {
@@ -46,7 +58,7 @@ describe('SearchService', () => {
       },
     ]);
 
-    const result = await searchService.search('nestjs', 1, 20);
+    const result = await searchService.search('viewer-1', 'nestjs', 1, 20);
 
     expect(result.posts).toEqual([
       {
@@ -62,13 +74,13 @@ describe('SearchService', () => {
   it('maps user rows into the user response shape', async () => {
     const createdAt = new Date('2026-07-19T10:00:00.000Z');
     searchRepository.searchUsers.mockResolvedValue([
-      { id: 'user-1', email: 'alice@example.com', username: 'alice', createdAt },
+      { id: 'user-1', email: 'alice@example.com', username: 'alice', avatarUrl: null, createdAt },
     ]);
 
-    const result = await searchService.search('alice', 1, 20);
+    const result = await searchService.search('viewer-1', 'alice', 1, 20);
 
     expect(result.users).toEqual([
-      { id: 'user-1', email: 'alice@example.com', username: 'alice', createdAt },
+      { id: 'user-1', email: 'alice@example.com', username: 'alice', avatarUrl: null, createdAt },
     ]);
   });
 });

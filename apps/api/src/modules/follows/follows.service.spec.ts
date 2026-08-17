@@ -1,7 +1,12 @@
 import { PinoLogger } from 'nestjs-pino';
 
-import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
+import { BlocksService } from '@/modules/blocks/blocks.service';
 import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { UsersService } from '@/modules/users/users.service';
@@ -20,6 +25,7 @@ describe('FollowsService', () => {
   let notificationsRepository: jest.Mocked<NotificationsRepository>;
   let notificationDeliveryQueue: jest.Mocked<NotificationDeliveryQueue>;
   let usersService: jest.Mocked<UsersService>;
+  let blocksService: jest.Mocked<BlocksService>;
   let logger: jest.Mocked<PinoLogger>;
 
   const tx = {} as never;
@@ -63,6 +69,10 @@ describe('FollowsService', () => {
       findById: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
+    blocksService = {
+      isBlockedEitherDirection: jest.fn().mockResolvedValue(false),
+    } as unknown as jest.Mocked<BlocksService>;
+
     logger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -78,6 +88,7 @@ describe('FollowsService', () => {
       notificationsRepository,
       notificationDeliveryQueue,
       usersService,
+      blocksService,
       logger,
     );
 
@@ -118,6 +129,15 @@ describe('FollowsService', () => {
 
       await expect(followsService.followUser('user-1', 'user-2')).rejects.toThrow(
         NotFoundException,
+      );
+      expect(followsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when there is a block between the two users', async () => {
+      blocksService.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(followsService.followUser('user-1', 'user-2')).rejects.toThrow(
+        ForbiddenException,
       );
       expect(followsRepository.create).not.toHaveBeenCalled();
     });

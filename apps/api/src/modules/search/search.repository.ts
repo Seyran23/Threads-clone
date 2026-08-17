@@ -14,6 +14,7 @@ interface UserSearchRow {
   id: string;
   email: string;
   username: string;
+  avatarUrl: string | null;
   createdAt: Date;
 }
 
@@ -21,6 +22,7 @@ interface UserSearchRow {
 export class SearchRepository {
   searchPosts(
     tx: PrismaClientOrTx,
+    viewerId: string,
     tsQuery: string,
     limit: number,
     offset: number,
@@ -35,6 +37,11 @@ export class SearchRepository {
       FROM posts p
       JOIN users u ON u.id = p.author_id
       WHERE p.search_vector @@ to_tsquery('english', ${tsQuery})
+        AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = p.author_id)
+             OR (b.blocked_id = ${viewerId} AND b.blocker_id = p.author_id)
+        )
       ORDER BY ts_rank(p.search_vector, to_tsquery('english', ${tsQuery})) DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -42,14 +49,20 @@ export class SearchRepository {
 
   searchUsers(
     tx: PrismaClientOrTx,
+    viewerId: string,
     tsQuery: string,
     limit: number,
     offset: number,
   ): Promise<UserSearchRow[]> {
     return tx.$queryRaw<UserSearchRow[]>`
-      SELECT id, email, username, created_at AS "createdAt"
+      SELECT id, email, username, avatar_url AS "avatarUrl", created_at AS "createdAt"
       FROM users
       WHERE search_vector @@ to_tsquery('english', ${tsQuery})
+        AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = users.id)
+             OR (b.blocked_id = ${viewerId} AND b.blocker_id = users.id)
+        )
       ORDER BY ts_rank(search_vector, to_tsquery('english', ${tsQuery})) DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

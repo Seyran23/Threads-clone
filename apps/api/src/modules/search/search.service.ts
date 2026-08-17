@@ -15,7 +15,12 @@ export class SearchService {
     private readonly searchRepository: SearchRepository,
   ) {}
 
-  async search(query: string, page: number, limit: number): Promise<SearchResultsResponse> {
+  async search(
+    viewerId: string,
+    query: string,
+    page: number,
+    limit: number,
+  ): Promise<SearchResultsResponse> {
     const tsQuery = buildPrefixTsQuery(query);
     if (!tsQuery) {
       return { posts: [], users: [] };
@@ -24,8 +29,8 @@ export class SearchService {
     const offset = (page - 1) * limit;
 
     const [postRows, userRows] = await Promise.all([
-      this.searchRepository.searchPosts(this.prisma, tsQuery, limit, offset),
-      this.searchRepository.searchUsers(this.prisma, tsQuery, limit, offset),
+      this.searchRepository.searchPosts(this.prisma, viewerId, tsQuery, limit, offset),
+      this.searchRepository.searchUsers(this.prisma, viewerId, tsQuery, limit, offset),
     ]);
 
     const posts: PostSearchResultResponse[] = postRows.map((row) => ({
@@ -39,6 +44,7 @@ export class SearchService {
       id: row.id,
       email: row.email,
       username: row.username,
+      avatarUrl: row.avatarUrl,
       createdAt: row.createdAt,
     }));
 

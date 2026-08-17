@@ -1,8 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 
-import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
+import { BlocksService } from '@/modules/blocks/blocks.service';
 import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queue/notification-delivery.queue';
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { UsersService } from '@/modules/users/users.service';
@@ -22,6 +27,8 @@ export class FollowsService {
     private readonly notificationsRepository: NotificationsRepository,
     private readonly notificationDeliveryQueue: NotificationDeliveryQueue,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => BlocksService))
+    private readonly blocksService: BlocksService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(FollowsService.name);
@@ -35,6 +42,11 @@ export class FollowsService {
     const followee = await this.usersService.findById(followeeId);
     if (!followee) {
       throw new NotFoundException('User', followeeId);
+    }
+
+    const isBlocked = await this.blocksService.isBlockedEitherDirection(followerId, followeeId);
+    if (isBlocked) {
+      throw new ForbiddenException('You cannot follow this user');
     }
 
     const existing = await this.followsRepository.findOne(this.prisma, followerId, followeeId);
