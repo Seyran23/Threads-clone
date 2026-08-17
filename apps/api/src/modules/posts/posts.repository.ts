@@ -58,6 +58,24 @@ export class PostsRepository {
     });
   }
 
+  findByAuthor(
+    tx: PrismaClientOrTx,
+    authorId: string,
+    beforeMs: number | undefined,
+    limit: number,
+  ): Promise<PostWithRelations[]> {
+    return tx.post.findMany({
+      where: {
+        authorId,
+        parentId: null,
+        ...(beforeMs !== undefined ? { createdAt: { lt: new Date(beforeMs) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: POST_INCLUDE,
+    });
+  }
+
   async findFollowedAuthorIds(
     tx: PrismaClientOrTx,
     viewerId: string,
@@ -73,5 +91,43 @@ export class PostsRepository {
       select: { followeeId: true },
     });
     return new Set(follows.map((f) => f.followeeId));
+  }
+
+  async isBlockedEitherDirection(
+    tx: PrismaClientOrTx,
+    userIdA: string,
+    userIdB: string,
+  ): Promise<boolean> {
+    const block = await tx.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: userIdA, blockedId: userIdB },
+          { blockerId: userIdB, blockedId: userIdA },
+        ],
+      },
+    });
+    return block !== null;
+  }
+
+  async findBlockedAuthorIds(
+    tx: PrismaClientOrTx,
+    viewerId: string,
+    authorIds: string[],
+  ): Promise<Set<string>> {
+    const uniqueIds = [...new Set(authorIds)].filter((id) => id !== viewerId);
+    if (uniqueIds.length === 0) {
+      return new Set();
+    }
+
+    const blocks = await tx.block.findMany({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: { in: uniqueIds } },
+          { blockedId: viewerId, blockerId: { in: uniqueIds } },
+        ],
+      },
+      select: { blockerId: true, blockedId: true },
+    });
+    return new Set(blocks.map((b) => (b.blockerId === viewerId ? b.blockedId : b.blockerId)));
   }
 }

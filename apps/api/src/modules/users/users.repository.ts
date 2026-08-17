@@ -4,6 +4,7 @@ import { User } from '@/generated/prisma';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserRecordDto } from './dto/update-user-record.dto';
 
 @Injectable()
 export class UsersRepository {
@@ -23,5 +24,36 @@ export class UsersRepository {
 
   create(data: CreateUserDto): Promise<User> {
     return this.prisma.user.create({ data });
+  }
+
+  update(id: string, data: UpdateUserRecordDto): Promise<User> {
+    return this.prisma.user.update({ where: { id }, data });
+  }
+
+  countFollowers(userId: string): Promise<number> {
+    return this.prisma.follow.count({ where: { followeeId: userId } });
+  }
+
+  countFollowing(userId: string): Promise<number> {
+    return this.prisma.follow.count({ where: { followerId: userId } });
+  }
+
+  async isFollowing(followerId: string, followeeId: string): Promise<boolean> {
+    const follow = await this.prisma.follow.findUnique({
+      where: { followerId_followeeId: { followerId, followeeId } },
+    });
+    return follow !== null;
+  }
+
+  async isBlockedEitherDirection(userIdA: string, userIdB: string): Promise<boolean> {
+    const block = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: userIdA, blockedId: userIdB },
+          { blockerId: userIdB, blockedId: userIdA },
+        ],
+      },
+    });
+    return block !== null;
   }
 }

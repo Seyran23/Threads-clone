@@ -11,10 +11,19 @@ import { LikesRepository } from './likes.repository';
 import { PostsController } from './posts.controller';
 import { PostsRepository } from './posts.repository';
 import { PostsService } from './posts.service';
+import { SavedPostsRepository } from './saved-posts.repository';
 
 @Module({
   imports: [MediaModule, FeedModule, NotificationsModule, TrendingModule],
   controllers: [PostsController],
-  providers: [PostsService, PostsRepository, HashtagsRepository, LikesRepository, JwtAuthGuard],
+  providers: [
+    PostsService,
+    PostsRepository,
+    HashtagsRepository,
+    LikesRepository,
+    SavedPostsRepository,
+    JwtAuthGuard,
+  ],
+  exports: [PostsRepository, LikesRepository, SavedPostsRepository],
 })
 export class PostsModule {}

@@ -11,6 +11,7 @@ export interface Post {
   isLiked: boolean;
   replyCount: number;
   isFollowing: boolean;
+  isSaved: boolean;
   hashtags: string[];
   media: Media[];
   createdAt: string;
@@ -23,6 +24,11 @@ export interface LikeResult {
 }
 
 export interface RepliesPage {
+  items: Post[];
+  nextCursor: string | null;
+}
+
+export interface UserPostsPage {
   items: Post[];
   nextCursor: string | null;
 }

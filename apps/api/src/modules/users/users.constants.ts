@@ -1,0 +1,2 @@
+export const DEFAULT_USER_POSTS_PAGE_SIZE = 20;
+export const MAX_USER_POSTS_PAGE_SIZE = 50;

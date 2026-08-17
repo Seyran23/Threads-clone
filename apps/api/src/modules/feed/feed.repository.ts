@@ -164,6 +164,44 @@ export class FeedRepository {
     return new Set(follows.map((f) => f.followeeId));
   }
 
+  async getSavedPostIds(
+    tx: PrismaClientOrTx,
+    viewerId: string,
+    postIds: string[],
+  ): Promise<Set<string>> {
+    if (postIds.length === 0) {
+      return new Set();
+    }
+
+    const saved = await tx.savedPost.findMany({
+      where: { userId: viewerId, postId: { in: postIds } },
+      select: { postId: true },
+    });
+    return new Set(saved.map((s) => s.postId));
+  }
+
+  async getBlockedAuthorIds(
+    tx: PrismaClientOrTx,
+    viewerId: string,
+    authorIds: string[],
+  ): Promise<Set<string>> {
+    const uniqueIds = [...new Set(authorIds)].filter((id) => id !== viewerId);
+    if (uniqueIds.length === 0) {
+      return new Set();
+    }
+
+    const blocks = await tx.block.findMany({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: { in: uniqueIds } },
+          { blockedId: viewerId, blockerId: { in: uniqueIds } },
+        ],
+      },
+      select: { blockerId: true, blockedId: true },
+    });
+    return new Set(blocks.map((b) => (b.blockerId === viewerId ? b.blockedId : b.blockerId)));
+  }
+
   private feedKey(userId: string): string {
     return `feed:${userId}`;
   }

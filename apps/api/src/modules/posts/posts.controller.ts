@@ -84,4 +84,20 @@ export class PostsController {
   unlikePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<LikeResponse> {
     return this.postsService.unlikePost(user.id, id);
   }
+
+  @Post(':id/save')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(LIKE_THROTTLE)
+  savePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<void> {
+    return this.postsService.savePost(user.id, id);
+  }
+
+  @Delete(':id/save')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AppThrottlerGuard)
+  @Throttle(LIKE_THROTTLE)
+  unsavePost(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<void> {
+    return this.postsService.unsavePost(user.id, id);
+  }
 }

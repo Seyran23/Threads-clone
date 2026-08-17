@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 
-import { ConflictException, NotFoundException } from '@/common/exceptions/app.exception';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@/common/exceptions/app.exception';
 import { PrismaService } from '@/infrastructure/prisma/prisma.service';
 import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
 import { FanoutQueue } from '@/modules/feed/fanout/queue/fanout.queue';
@@ -19,6 +23,7 @@ import { PostsRepository } from './posts.repository';
 import { LikeResponse } from './response/like.response';
 import { PostResponse, PostWithRelations } from './response/post.response';
 import { RepliesResponse } from './response/replies.response';
+import { SavedPostsRepository } from './saved-posts.repository';
 import { extractHashtags } from './utils/hashtag.util';
 import { decodeRepliesCursor, encodeRepliesCursor } from './utils/replies-cursor.util';
 
@@ -29,6 +34,7 @@ export class PostsService {
     private readonly postsRepository: PostsRepository,
     private readonly hashtagsRepository: HashtagsRepository,
     private readonly likesRepository: LikesRepository,
+    private readonly savedPostsRepository: SavedPostsRepository,
     private readonly mediaService: MediaService,
     private readonly mediaRepository: MediaRepository,
     private readonly imageProcessingQueue: ImageProcessingQueue,
@@ -62,13 +68,27 @@ export class PostsService {
     await this.trendingService.recordUsage(extractHashtags(dto.content));
     this.logger.info({ postId: post.id, authorId, mediaCount: post.media.length }, 'Post created');
 
-    return PostResponse.from(post, 0, false, false);
+    return PostResponse.from(post, {
+      likeCount: 0,
+      isLiked: false,
+      isFollowing: false,
+      isSaved: false,
+    });
   }
 
   async createReply(authorId: string, parentId: string, dto: CreatePostDto): Promise<PostResponse> {
     const parent = await this.postsRepository.findDepthById(this.prisma, parentId);
     if (!parent) {
       throw new NotFoundException('Post', parentId);
+    }
+
+    const isBlocked = await this.postsRepository.isBlockedEitherDirection(
+      this.prisma,
+      authorId,
+      parent.authorId,
+    );
+    if (isBlocked) {
+      throw new ForbiddenException('You cannot reply to this post');
     }
 
     const hashtagIds = await this.resolveHashtagIds(this.prisma, dto.content);
@@ -111,7 +131,12 @@ export class PostsService {
       'Reply created',
     );
 
-    return PostResponse.from(post, 0, false, false);
+    return PostResponse.from(post, {
+      likeCount: 0,
+      isLiked: false,
+      isFollowing: false,
+      isSaved: false,
+    });
   }
 
   async getPost(viewerId: string, id: string): Promise<PostResponse> {
@@ -120,19 +145,28 @@ export class PostsService {
       throw new NotFoundException('Post', id);
     }
 
-    const likeCount = await this.likesRepository.getCount(this.prisma, id);
-    const likedPostIds = await this.likesRepository.findLikedPostIds(this.prisma, viewerId, [id]);
-    const followedAuthorIds = await this.postsRepository.findFollowedAuthorIds(
+    const isBlocked = await this.postsRepository.isBlockedEitherDirection(
       this.prisma,
       viewerId,
-      [post.authorId],
+      post.authorId,
     );
-    return PostResponse.from(
-      post,
+    if (isBlocked) {
+      throw new NotFoundException('Post', id);
+    }
+
+    const [likeCount, likedPostIds, followedAuthorIds, savedPostIds] = await Promise.all([
+      this.likesRepository.getCount(this.prisma, id),
+      this.likesRepository.findLikedPostIds(this.prisma, viewerId, [id]),
+      this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, [post.authorId]),
+      this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, [id]),
+    ]);
+
+    return PostResponse.from(post, {
       likeCount,
-      likedPostIds.has(id),
-      followedAuthorIds.has(post.authorId),
-    );
+      isLiked: likedPostIds.has(id),
+      isFollowing: followedAuthorIds.has(post.authorId),
+      isSaved: savedPostIds.has(id),
+    });
   }
 
   async getReplies(
@@ -146,25 +180,39 @@ export class PostsService {
       throw new NotFoundException('Post', parentId);
     }
 
+    const isBlocked = await this.postsRepository.isBlockedEitherDirection(
+      this.prisma,
+      viewerId,
+      parent.authorId,
+    );
+    if (isBlocked) {
+      throw new NotFoundException('Post', parentId);
+    }
+
     const afterMs = decodeRepliesCursor(cursor);
     const replies = await this.postsRepository.findReplies(this.prisma, parentId, afterMs, limit);
     const replyIds = replies.map((reply) => reply.id);
     const authorIds = replies.map((reply) => reply.authorId);
 
-    const [likeCounts, likedPostIds, followedAuthorIds] = await Promise.all([
-      this.likesRepository.getCounts(replyIds),
-      this.likesRepository.findLikedPostIds(this.prisma, viewerId, replyIds),
-      this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, authorIds),
-    ]);
+    const [likeCounts, likedPostIds, followedAuthorIds, savedPostIds, blockedAuthorIds] =
+      await Promise.all([
+        this.likesRepository.getCounts(replyIds),
+        this.likesRepository.findLikedPostIds(this.prisma, viewerId, replyIds),
+        this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, authorIds),
+        this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, replyIds),
+        this.postsRepository.findBlockedAuthorIds(this.prisma, viewerId, authorIds),
+      ]);
 
-    const items = replies.map((reply) =>
-      PostResponse.from(
-        reply,
-        likeCounts.get(reply.id) ?? 0,
-        likedPostIds.has(reply.id),
-        followedAuthorIds.has(reply.authorId),
-      ),
-    );
+    const items = replies
+      .filter((reply) => !blockedAuthorIds.has(reply.authorId))
+      .map((reply) =>
+        PostResponse.from(reply, {
+          likeCount: likeCounts.get(reply.id) ?? 0,
+          isLiked: likedPostIds.has(reply.id),
+          isFollowing: followedAuthorIds.has(reply.authorId),
+          isSaved: savedPostIds.has(reply.id),
+        }),
+      );
 
     const hasMore = replies.length === limit;
     const nextCursor = hasMore
@@ -183,6 +231,15 @@ export class PostsService {
     const existing = await this.likesRepository.findOne(this.prisma, userId, postId);
     if (existing) {
       throw new ConflictException('Post is already liked');
+    }
+
+    const isBlocked = await this.postsRepository.isBlockedEitherDirection(
+      this.prisma,
+      userId,
+      post.authorId,
+    );
+    if (isBlocked) {
+      throw new ForbiddenException('You cannot like this post');
     }
 
     const notification = await this.prisma.$transaction(async (tx) => {
@@ -216,6 +273,21 @@ export class PostsService {
 
     const likeCount = await this.likesRepository.getCount(this.prisma, postId);
     return { liked: false, likeCount };
+  }
+
+  async savePost(userId: string, postId: string): Promise<void> {
+    const post = await this.postsRepository.findDepthById(this.prisma, postId);
+    if (!post) {
+      throw new NotFoundException('Post', postId);
+    }
+
+    await this.savedPostsRepository.save(this.prisma, userId, postId);
+    this.logger.info({ postId, userId }, 'Post saved');
+  }
+
+  async unsavePost(userId: string, postId: string): Promise<void> {
+    await this.savedPostsRepository.unsave(this.prisma, userId, postId);
+    this.logger.info({ postId, userId }, 'Post unsaved');
   }
 
   private async resolveHashtagIds(tx: PrismaClientOrTx, content: string): Promise<string[]> {

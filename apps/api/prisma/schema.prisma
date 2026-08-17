@@ -13,6 +13,7 @@ model User {
   email        String                   @unique
   username     String                   @unique
   passwordHash String                   @map("password_hash")
+  avatarUrl    String?                  @map("avatar_url")
   searchVector Unsupported("tsvector")? @map("search_vector")
   createdAt    DateTime                 @default(now()) @map("created_at")
   updatedAt    DateTime                 @updatedAt @map("updated_at")
@@ -20,12 +21,28 @@ model User {
   refreshTokens         RefreshToken[]
   posts                 Post[]
   likes                 Like[]
+  savedPosts            SavedPost[]
   following             Follow[]       @relation("Follower")
   followedBy            Follow[]       @relation("Followee")
   notificationsReceived Notification[] @relation("NotificationRecipient")
   notificationsSent     Notification[] @relation("NotificationActor")
+  blocksInitiated       Block[]        @relation("Blocker")
+  blocksReceived        Block[]        @relation("Blocked")
 
   @@map("users")
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String   @map("blocker_id")
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String   @map("blocked_id")
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("blocks")
 }
 
 enum FanoutStatus {
@@ -53,12 +70,27 @@ model Post {
   hashtags      PostHashtag[]
   media         Media[]
   notifications Notification[]
+  savedBy       SavedPost[]
 
   @@index([authorId])
   @@index([parentId])
   @@index([parentId, createdAt])
   @@index([fanoutStatus, createdAt])
   @@map("posts")
+}
+
+model SavedPost {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId, createdAt])
+  @@map("saved_posts")
 }
 
 model Follow {

@@ -18,6 +18,7 @@ import { HashtagsRepository } from './hashtags.repository';
 import { LikesRepository } from './likes.repository';
 import { PostsRepository } from './posts.repository';
 import { PostsService } from './posts.service';
+import { SavedPostsRepository } from './saved-posts.repository';
 
 describe('PostsService', () => {
   let postsService: PostsService;
@@ -25,6 +26,7 @@ describe('PostsService', () => {
   let postsRepository: jest.Mocked<PostsRepository>;
   let hashtagsRepository: jest.Mocked<HashtagsRepository>;
   let likesRepository: jest.Mocked<LikesRepository>;
+  let savedPostsRepository: jest.Mocked<SavedPostsRepository>;
   let mediaService: jest.Mocked<MediaService>;
   let mediaRepository: jest.Mocked<MediaRepository>;
   let imageProcessingQueue: jest.Mocked<ImageProcessingQueue>;
@@ -91,6 +93,8 @@ describe('PostsService', () => {
       incrementReplyCount: jest.fn(),
       findReplies: jest.fn(),
       findFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
+      isBlockedEitherDirection: jest.fn().mockResolvedValue(false),
+      findBlockedAuthorIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<PostsRepository>;
 
     hashtagsRepository = {
@@ -108,6 +112,13 @@ describe('PostsService', () => {
       getCounts: jest.fn().mockResolvedValue(new Map()),
       findLikedPostIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<LikesRepository>;
+
+    savedPostsRepository = {
+      save: jest.fn(),
+      unsave: jest.fn(),
+      findSavedPostIds: jest.fn().mockResolvedValue(new Set()),
+      findByUser: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<SavedPostsRepository>;
 
     mediaService = {
       assertOwnedByUser: jest.fn(),
@@ -150,6 +161,7 @@ describe('PostsService', () => {
       postsRepository,
       hashtagsRepository,
       likesRepository,
+      savedPostsRepository,
       mediaService,
       mediaRepository,
       imageProcessingQueue,
@@ -268,6 +280,16 @@ describe('PostsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('throws ForbiddenException when the replier and the parent author have blocked each other', async () => {
+      postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(
+        postsService.createReply('user-1', 'parent-1', { content: 'hi' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(postsRepository.create).not.toHaveBeenCalled();
+    });
+
     it('validates media ownership before creating anything', async () => {
       mediaService.assertOwnedByUser.mockImplementation(() => {
         throw new ForbiddenException('nope');
@@ -351,6 +373,12 @@ describe('PostsService', () => {
       await expect(postsService.getPost('user-1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
+    it('throws NotFoundException when the viewer and the author have blocked each other', async () => {
+      postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(postsService.getPost('user-1', 'post-1')).rejects.toThrow(NotFoundException);
+    });
+
     it('sets isLiked true when the viewer has liked the post', async () => {
       likesRepository.getCount.mockResolvedValue(5);
       likesRepository.findLikedPostIds.mockResolvedValue(new Set(['post-1']));
@@ -404,6 +432,25 @@ describe('PostsService', () => {
       await expect(postsService.getReplies('user-1', 'missing', undefined, 20)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('throws NotFoundException when the viewer and the parent author have blocked each other', async () => {
+      postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(postsService.getReplies('user-1', 'parent-1', undefined, 20)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('excludes replies from an author blocked in either direction with the viewer', async () => {
+      postsRepository.findBlockedAuthorIds.mockResolvedValue(new Set(['user-1']));
+
+      const result = await postsService.getReplies('viewer-1', 'parent-1', undefined, 20);
+
+      expect(postsRepository.findBlockedAuthorIds).toHaveBeenCalledWith(prisma, 'viewer-1', [
+        'user-1',
+      ]);
+      expect(result.items).toHaveLength(0);
     });
 
     it('returns replies with per-reply like counts and isLiked flags', async () => {
@@ -468,6 +515,13 @@ describe('PostsService', () => {
       expect(likesRepository.create).not.toHaveBeenCalled();
     });
 
+    it('throws ForbiddenException when the liker and the post author have blocked each other', async () => {
+      postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(postsService.likePost('user-1', 'post-1')).rejects.toThrow(ForbiddenException);
+      expect(likesRepository.create).not.toHaveBeenCalled();
+    });
+
     it('creates the Like row and increments the counter', async () => {
       await postsService.likePost('user-1', 'post-1');
 
@@ -518,6 +572,31 @@ describe('PostsService', () => {
       await postsService.unlikePost('user-1', 'post-1');
 
       expect(likesRepository.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('savePost', () => {
+    it('throws NotFoundException when the post does not exist', async () => {
+      postsRepository.findDepthById.mockResolvedValue(null);
+
+      await expect(postsService.savePost('user-1', 'missing')).rejects.toThrow(NotFoundException);
+      expect(savedPostsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('saves the post', async () => {
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'post-author-1' });
+
+      await postsService.savePost('user-1', 'post-1');
+
+      expect(savedPostsRepository.save).toHaveBeenCalledWith(prisma, 'user-1', 'post-1');
+    });
+  });
+
+  describe('unsavePost', () => {
+    it('unsaves the post', async () => {
+      await postsService.unsavePost('user-1', 'post-1');
+
+      expect(savedPostsRepository.unsave).toHaveBeenCalledWith(prisma, 'user-1', 'post-1');
     });
   });
 });

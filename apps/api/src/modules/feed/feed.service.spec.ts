@@ -46,6 +46,8 @@ describe('FeedService', () => {
       getLikeCounts: jest.fn().mockResolvedValue(new Map()),
       getLikedPostIds: jest.fn().mockResolvedValue(new Set()),
       getFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
+      getSavedPostIds: jest.fn().mockResolvedValue(new Set()),
+      getBlockedAuthorIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<FeedRepository>;
 
     logger = {
@@ -101,6 +103,36 @@ describe('FeedService', () => {
       'author-1',
     ]);
     expect(result.items[0].isFollowing).toBe(true);
+  });
+
+  it('marks saved posts as isSaved', async () => {
+    const createdAt = new Date('2026-07-08T10:00:00.000Z');
+    feedRepository.getFeedEntries.mockResolvedValue([
+      { postId: 'post-1', score: createdAt.getTime() },
+    ]);
+    feedRepository.findManyByIds.mockResolvedValue([makePost('post-1', createdAt)] as never);
+    feedRepository.getSavedPostIds.mockResolvedValue(new Set(['post-1']));
+
+    const result = await feedService.getFeed('viewer-1', undefined, 20);
+
+    expect(feedRepository.getSavedPostIds).toHaveBeenCalledWith(prisma, 'viewer-1', ['post-1']);
+    expect(result.items[0].isSaved).toBe(true);
+  });
+
+  it('excludes posts from an author blocked in either direction with the viewer', async () => {
+    const createdAt = new Date('2026-07-08T10:00:00.000Z');
+    feedRepository.getFeedEntries.mockResolvedValue([
+      { postId: 'post-1', score: createdAt.getTime() },
+    ]);
+    feedRepository.findManyByIds.mockResolvedValue([makePost('post-1', createdAt)] as never);
+    feedRepository.getBlockedAuthorIds.mockResolvedValue(new Set(['author-1']));
+
+    const result = await feedService.getFeed('viewer-1', undefined, 20);
+
+    expect(feedRepository.getBlockedAuthorIds).toHaveBeenCalledWith(prisma, 'viewer-1', [
+      'author-1',
+    ]);
+    expect(result.items).toHaveLength(0);
   });
 
   it('merges celebrity posts in with fanned-out posts, most recent first', async () => {
