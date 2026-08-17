@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 
 import type { Post } from '@threads-clone/shared-types';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api/client';
@@ -73,6 +73,9 @@ export function PostComposer({ parentId, placeholder, onSuccess }: PostComposerP
       className="flex gap-3 border-b border-border p-4"
     >
       <Avatar size="lg">
+        {data?.user.avatarUrl && (
+          <AvatarImage src={data.user.avatarUrl} alt={`${username}'s avatar`} />
+        )}
         <AvatarFallback>{username.slice(0, 1).toUpperCase()}</AvatarFallback>
       </Avatar>
 
