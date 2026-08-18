@@ -82,6 +82,7 @@ export default function HomePage() {
             <DropdownMenuItem onClick={() => router.push('/blocked')}>
               Blocked accounts
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/graph')}>Network</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {

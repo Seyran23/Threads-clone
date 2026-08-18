@@ -12,4 +12,6 @@ export const queryKeys = {
   savedPosts: ['savedPosts'] as const,
   blockedUsers: ['blockedUsers'] as const,
   followRequests: ['followRequests'] as const,
+  graphView: (userId: string) => ['graphView', userId] as const,
+  nodeDetails: (userId: string) => ['nodeDetails', userId] as const,
 };
