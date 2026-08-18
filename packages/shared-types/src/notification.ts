@@ -1,6 +1,6 @@
 import type { User } from './user';
 
-export type NotificationType = 'LIKE' | 'REPLY' | 'FOLLOW';
+export type NotificationType = 'LIKE' | 'REPLY' | 'FOLLOW' | 'FOLLOW_REQUEST';
 export type NotificationStatus = 'PENDING' | 'DELIVERED' | 'FAILED' | 'SKIPPED';
 
 export interface Notification {

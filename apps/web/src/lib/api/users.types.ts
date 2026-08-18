@@ -6,4 +6,5 @@ export interface GetUserPostsParams {
 export interface UpdateProfileInput {
   username?: string;
   avatarKey?: string;
+  isPrivate?: boolean;
 }

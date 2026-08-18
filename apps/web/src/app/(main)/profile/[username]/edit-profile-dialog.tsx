@@ -25,13 +25,15 @@ import { cn } from '@/lib/utils';
 interface EditProfileDialogProps {
   username: string;
   avatarUrl: string | null;
+  isPrivate: boolean;
 }
 
-export function EditProfileDialog({ username, avatarUrl }: EditProfileDialogProps) {
+export function EditProfileDialog({ username, avatarUrl, isPrivate }: EditProfileDialogProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [usernameInput, setUsernameInput] = useState(username);
+  const [isPrivateInput, setIsPrivateInput] = useState(isPrivate);
   const { upload, selectFile, reset } = useAvatarUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,6 +42,7 @@ export function EditProfileDialog({ username, avatarUrl }: EditProfileDialogProp
       updateProfile({
         username: usernameInput !== username ? usernameInput : undefined,
         avatarKey: upload?.status === 'done' ? upload.s3Key : undefined,
+        isPrivate: isPrivateInput !== isPrivate ? isPrivateInput : undefined,
       }),
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.profile(updated.username), updated);
@@ -61,6 +64,7 @@ export function EditProfileDialog({ username, avatarUrl }: EditProfileDialogProp
         setOpen(next);
         if (!next) {
           setUsernameInput(username);
+          setIsPrivateInput(isPrivate);
           reset();
         }
       }}
@@ -115,6 +119,33 @@ export function EditProfileDialog({ username, avatarUrl }: EditProfileDialogProp
             value={usernameInput}
             onChange={(e) => setUsernameInput(e.target.value)}
           />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 py-1">
+          <div>
+            <p className="text-sm font-medium">Private account</p>
+            <p className="text-xs text-muted-foreground">
+              Only approved followers can see your posts.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isPrivateInput}
+            aria-label="Private account"
+            onClick={() => setIsPrivateInput((prev) => !prev)}
+            className={cn(
+              'relative h-6 w-11 shrink-0 rounded-full transition-colors',
+              isPrivateInput ? 'bg-primary' : 'bg-muted',
+            )}
+          >
+            <span
+              className={cn(
+                'absolute top-0.5 left-0.5 size-5 rounded-full bg-background transition-transform',
+                isPrivateInput && 'translate-x-5',
+              )}
+            />
+          </button>
         </div>
 
         {mutation.isError && (

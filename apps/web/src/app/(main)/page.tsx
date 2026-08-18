@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Menu, Search } from 'lucide-react';
+import { Bell, Menu, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -102,7 +102,7 @@ export default function HomePage() {
             <Search className="size-6" />
           </Link>
           <Link href="/activity" aria-label="Notifications" className="relative">
-            <Heart className="size-6" />
+            <Bell className="size-6" />
             {hasNewNotification && (
               <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive" />
             )}

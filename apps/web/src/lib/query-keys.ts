@@ -11,4 +11,5 @@ export const queryKeys = {
   suggestedUsers: (userId: string) => ['suggestedUsers', userId] as const,
   savedPosts: ['savedPosts'] as const,
   blockedUsers: ['blockedUsers'] as const,
+  followRequests: ['followRequests'] as const,
 };

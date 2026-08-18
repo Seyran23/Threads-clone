@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Link as LinkIcon, MoreHorizontal, UserX } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Lock, MoreHorizontal, UserX } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -48,7 +48,7 @@ export function ProfileView({ username }: ProfileViewProps) {
       getUserPosts(username, { cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: profileQuery.isSuccess,
+    enabled: profileQuery.isSuccess && !!profileQuery.data?.canViewPosts,
   });
 
   const sentinelRef = useInfiniteScrollSentinel({
@@ -66,20 +66,46 @@ export function ProfileView({ username }: ProfileViewProps) {
       if (!profile) {
         throw new Error('Profile not loaded');
       }
-      return profile.isFollowing ? unfollowUser(profile.id) : followUser(profile.id);
+      return profile.isFollowing || profile.hasPendingRequest
+        ? unfollowUser(profile.id)
+        : followUser(profile.id);
     },
     onMutate: () => {
       const profile = profileQuery.data;
       if (!profile) {
         return undefined;
       }
-      const previous = profile.isFollowing;
-      queryClient.setQueryData(queryKeys.profile(username), {
-        ...profile,
-        isFollowing: !previous,
-        followerCount: profile.followerCount + (previous ? -1 : 1),
-      });
-      updateAuthorFollowInCaches(queryClient, profile.id, !previous);
+      const previous = {
+        isFollowing: profile.isFollowing,
+        hasPendingRequest: profile.hasPendingRequest,
+      };
+
+      if (profile.isFollowing) {
+        queryClient.setQueryData(queryKeys.profile(username), {
+          ...profile,
+          isFollowing: false,
+          followerCount: profile.followerCount - 1,
+        });
+        updateAuthorFollowInCaches(queryClient, profile.id, false);
+      } else if (profile.hasPendingRequest) {
+        queryClient.setQueryData(queryKeys.profile(username), {
+          ...profile,
+          hasPendingRequest: false,
+        });
+      } else if (profile.isPrivate) {
+        queryClient.setQueryData(queryKeys.profile(username), {
+          ...profile,
+          hasPendingRequest: true,
+        });
+      } else {
+        queryClient.setQueryData(queryKeys.profile(username), {
+          ...profile,
+          isFollowing: true,
+          followerCount: profile.followerCount + 1,
+        });
+        updateAuthorFollowInCaches(queryClient, profile.id, true);
+      }
+
       return previous;
     },
     onError: (_error, _vars, previous) => {
@@ -87,11 +113,8 @@ export function ProfileView({ username }: ProfileViewProps) {
       if (previous === undefined || !profile) {
         return;
       }
-      queryClient.setQueryData(queryKeys.profile(username), {
-        ...profile,
-        isFollowing: previous,
-      });
-      updateAuthorFollowInCaches(queryClient, profile.id, previous);
+      queryClient.setQueryData(queryKeys.profile(username), { ...profile, ...previous });
+      updateAuthorFollowInCaches(queryClient, profile.id, previous.isFollowing);
     },
     onSuccess: (result) => {
       const profile = profileQuery.data;
@@ -101,6 +124,7 @@ export function ProfileView({ username }: ProfileViewProps) {
       queryClient.setQueryData(queryKeys.profile(username), {
         ...profile,
         isFollowing: result.following,
+        hasPendingRequest: result.requested,
       });
       updateAuthorFollowInCaches(queryClient, profile.id, result.following);
     },
@@ -172,6 +196,7 @@ export function ProfileView({ username }: ProfileViewProps) {
                 <EditProfileDialog
                   username={profileQuery.data.username}
                   avatarUrl={profileQuery.data.avatarUrl}
+                  isPrivate={profileQuery.data.isPrivate}
                 />
                 <Button variant="outline" className="flex-1" onClick={() => void copyProfileLink()}>
                   {copied ? 'Copied!' : 'Share profile'}
@@ -180,11 +205,19 @@ export function ProfileView({ username }: ProfileViewProps) {
             ) : (
               <>
                 <Button
-                  variant={profileQuery.data.isFollowing ? 'outline' : 'default'}
+                  variant={
+                    profileQuery.data.isFollowing || profileQuery.data.hasPendingRequest
+                      ? 'outline'
+                      : 'default'
+                  }
                   className="flex-1"
                   onClick={() => followMutation.mutate()}
                 >
-                  {profileQuery.data.isFollowing ? 'Following' : 'Follow'}
+                  {profileQuery.data.isFollowing
+                    ? 'Following'
+                    : profileQuery.data.hasPendingRequest
+                      ? 'Requested'
+                      : 'Follow'}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -212,20 +245,32 @@ export function ProfileView({ username }: ProfileViewProps) {
 
       {isOwnProfile && profileQuery.data && <SuggestedUsers userId={profileQuery.data.id} />}
 
-      {postsQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading posts…</p>}
-      {postsQuery.isError && (
-        <p className="p-4 text-sm text-destructive">Couldn&apos;t load posts.</p>
-      )}
-      {postsQuery.data && posts.length === 0 && (
-        <p className="p-8 text-center text-sm text-muted-foreground">No threads yet.</p>
-      )}
-      {posts.map((post) => (
-        <PostCard key={post.id} post={post} />
-      ))}
+      {profileQuery.data && !profileQuery.data.canViewPosts ? (
+        <div className="flex flex-col items-center gap-2 p-10 text-center">
+          <Lock className="size-8 text-muted-foreground" />
+          <p className="text-base font-semibold">This account is private</p>
+          <p className="text-sm text-muted-foreground">Follow this account to see their threads.</p>
+        </div>
+      ) : (
+        <>
+          {postsQuery.isLoading && (
+            <p className="p-4 text-sm text-muted-foreground">Loading posts…</p>
+          )}
+          {postsQuery.isError && (
+            <p className="p-4 text-sm text-destructive">Couldn&apos;t load posts.</p>
+          )}
+          {postsQuery.data && posts.length === 0 && (
+            <p className="p-8 text-center text-sm text-muted-foreground">No threads yet.</p>
+          )}
+          {posts.map((post) => (
+            <PostCard key={post.id} post={post} />
+          ))}
 
-      <div ref={sentinelRef} className="h-1" />
-      {postsQuery.isFetchingNextPage && (
-        <p className="p-4 text-center text-sm text-muted-foreground">Loading more…</p>
+          <div ref={sentinelRef} className="h-1" />
+          {postsQuery.isFetchingNextPage && (
+            <p className="p-4 text-center text-sm text-muted-foreground">Loading more…</p>
+          )}
+        </>
       )}
     </div>
   );
