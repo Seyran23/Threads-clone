@@ -14,23 +14,39 @@ model User {
   username     String                   @unique
   passwordHash String                   @map("password_hash")
   avatarUrl    String?                  @map("avatar_url")
+  isPrivate    Boolean                  @default(false) @map("is_private")
   searchVector Unsupported("tsvector")? @map("search_vector")
   createdAt    DateTime                 @default(now()) @map("created_at")
   updatedAt    DateTime                 @updatedAt @map("updated_at")
 
-  refreshTokens         RefreshToken[]
-  posts                 Post[]
-  likes                 Like[]
-  savedPosts            SavedPost[]
-  following             Follow[]       @relation("Follower")
-  followedBy            Follow[]       @relation("Followee")
-  notificationsReceived Notification[] @relation("NotificationRecipient")
-  notificationsSent     Notification[] @relation("NotificationActor")
-  blocksInitiated       Block[]        @relation("Blocker")
-  blocksReceived        Block[]        @relation("Blocked")
-  reportsSubmitted      Report[]
+  refreshTokens          RefreshToken[]
+  posts                  Post[]
+  likes                  Like[]
+  savedPosts             SavedPost[]
+  following              Follow[]        @relation("Follower")
+  followedBy             Follow[]        @relation("Followee")
+  followRequestsSent     FollowRequest[] @relation("FollowRequester")
+  followRequestsReceived FollowRequest[] @relation("FollowTarget")
+  notificationsReceived  Notification[]  @relation("NotificationRecipient")
+  notificationsSent      Notification[]  @relation("NotificationActor")
+  blocksInitiated        Block[]         @relation("Blocker")
+  blocksReceived         Block[]         @relation("Blocked")
+  reportsSubmitted       Report[]
 
   @@map("users")
+}
+
+model FollowRequest {
+  id          String   @id @default(uuid())
+  requesterId String   @map("requester_id")
+  requester   User     @relation("FollowRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetId    String   @map("target_id")
+  target      User     @relation("FollowTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([requesterId, targetId])
+  @@index([targetId])
+  @@map("follow_requests")
 }
 
 model Block {
@@ -159,6 +175,7 @@ enum NotificationType {
   LIKE
   REPLY
   FOLLOW
+  FOLLOW_REQUEST
 }
 
 enum NotificationStatus {

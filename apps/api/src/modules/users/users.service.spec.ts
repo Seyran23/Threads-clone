@@ -31,6 +31,7 @@ describe('UsersService', () => {
     id: 'user-1',
     ...createDto,
     avatarUrl: null,
+    isPrivate: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -46,6 +47,7 @@ describe('UsersService', () => {
       countFollowing: jest.fn(),
       isFollowing: jest.fn(),
       isBlockedEitherDirection: jest.fn().mockResolvedValue(false),
+      hasPendingFollowRequest: jest.fn().mockResolvedValue(false),
     } as unknown as jest.Mocked<UsersRepository>;
 
     postsRepository = {
@@ -159,10 +161,13 @@ describe('UsersService', () => {
         id: user.id,
         username: user.username,
         avatarUrl: null,
+        isPrivate: false,
         createdAt: user.createdAt,
         followerCount: 5,
         followingCount: 2,
         isFollowing: true,
+        hasPendingRequest: false,
+        canViewPosts: true,
       });
     });
 
@@ -188,6 +193,43 @@ describe('UsersService', () => {
       await usersService.getProfile('alice', user.id);
 
       expect(usersRepository.isBlockedEitherDirection).not.toHaveBeenCalled();
+    });
+
+    it('sets canViewPosts false for a private account you do not follow', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(false);
+
+      const result = await usersService.getProfile('alice', 'viewer-1');
+
+      expect(result.canViewPosts).toBe(false);
+    });
+
+    it('sets canViewPosts true for a private account you do follow', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(true);
+
+      const result = await usersService.getProfile('alice', 'viewer-1');
+
+      expect(result.canViewPosts).toBe(true);
+    });
+
+    it('reports hasPendingRequest for a private account with a pending request from the viewer', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(false);
+      usersRepository.hasPendingFollowRequest.mockResolvedValue(true);
+
+      const result = await usersService.getProfile('alice', 'viewer-1');
+
+      expect(usersRepository.hasPendingFollowRequest).toHaveBeenCalledWith('viewer-1', user.id);
+      expect(result.hasPendingRequest).toBe(true);
+    });
+
+    it('never checks for a pending request for a public account', async () => {
+      usersRepository.findByUsername.mockResolvedValue(user);
+
+      await usersService.getProfile('alice', 'viewer-1');
+
+      expect(usersRepository.hasPendingFollowRequest).not.toHaveBeenCalled();
     });
   });
 
@@ -216,6 +258,37 @@ describe('UsersService', () => {
       const result = await usersService.getUserPosts('alice', 'viewer-1', undefined, 20);
 
       expect(result.nextCursor).toBeNull();
+      expect(result.items).toEqual([]);
+    });
+
+    it('returns an empty list without querying posts for a private account you do not follow', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(false);
+
+      const result = await usersService.getUserPosts('alice', 'viewer-1', undefined, 20);
+
+      expect(postsRepository.findByAuthor).not.toHaveBeenCalled();
+      expect(result).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('returns posts for a private account you do follow', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(true);
+      postsRepository.findByAuthor.mockResolvedValue([]);
+
+      const result = await usersService.getUserPosts('alice', 'viewer-1', undefined, 20);
+
+      expect(postsRepository.findByAuthor).toHaveBeenCalled();
+      expect(result.items).toEqual([]);
+    });
+
+    it('returns posts for your own private account', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      postsRepository.findByAuthor.mockResolvedValue([]);
+
+      const result = await usersService.getUserPosts('alice', user.id, undefined, 20);
+
+      expect(postsRepository.findByAuthor).toHaveBeenCalled();
       expect(result.items).toEqual([]);
     });
   });
@@ -268,6 +341,12 @@ describe('UsersService', () => {
       await usersService.updateProfile(user.id, { username: 'alice' });
 
       expect(usersRepository.update).toHaveBeenCalledWith(user.id, { username: 'alice' });
+    });
+
+    it('updates isPrivate when provided', async () => {
+      await usersService.updateProfile(user.id, { isPrivate: true });
+
+      expect(usersRepository.update).toHaveBeenCalledWith(user.id, { isPrivate: true });
     });
 
     it('throws ForbiddenException when the avatar key does not belong to the user', async () => {

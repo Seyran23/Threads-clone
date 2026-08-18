@@ -5,6 +5,7 @@ import { BlocksModule } from '@/modules/blocks/blocks.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { UsersModule } from '@/modules/users/users.module';
 
+import { FollowRequestsRepository } from './follow-requests.repository';
 import { FollowsController } from './follows.controller';
 import { FollowsRepository } from './follows.repository';
 import { FollowsService } from './follows.service';
@@ -19,6 +20,7 @@ import { GraphSyncSweepService } from './graph-sync/sweep/graph-sync-sweep.servi
   providers: [
     FollowsService,
     FollowsRepository,
+    FollowRequestsRepository,
     GraphSyncOutboxRepository,
     GraphSyncQueue,
     GraphSyncProcessor,

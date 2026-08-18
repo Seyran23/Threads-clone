@@ -94,6 +94,15 @@ export class PostsService {
       throw new ForbiddenException('You cannot reply to this post');
     }
 
+    const isPrivateAndNotFollowing = await this.postsRepository.isPrivateAndNotFollowing(
+      this.prisma,
+      authorId,
+      parent.authorId,
+    );
+    if (isPrivateAndNotFollowing) {
+      throw new NotFoundException('Post', parentId);
+    }
+
     const hashtagIds = await this.resolveHashtagIds(this.prisma, dto.content);
     const mediaKeys = dto.mediaKeys ?? [];
     this.mediaService.assertOwnedByUser(authorId, mediaKeys);
@@ -157,6 +166,15 @@ export class PostsService {
       throw new NotFoundException('Post', id);
     }
 
+    const isPrivateAndNotFollowing = await this.postsRepository.isPrivateAndNotFollowing(
+      this.prisma,
+      viewerId,
+      post.authorId,
+    );
+    if (isPrivateAndNotFollowing) {
+      throw new NotFoundException('Post', id);
+    }
+
     const [likeCount, likedPostIds, followedAuthorIds, savedPostIds] = await Promise.all([
       this.likesRepository.getCount(this.prisma, id),
       this.likesRepository.findLikedPostIds(this.prisma, viewerId, [id]),
@@ -189,6 +207,15 @@ export class PostsService {
       parent.authorId,
     );
     if (isBlocked) {
+      throw new NotFoundException('Post', parentId);
+    }
+
+    const isPrivateAndNotFollowing = await this.postsRepository.isPrivateAndNotFollowing(
+      this.prisma,
+      viewerId,
+      parent.authorId,
+    );
+    if (isPrivateAndNotFollowing) {
       throw new NotFoundException('Post', parentId);
     }
 
@@ -243,6 +270,15 @@ export class PostsService {
     );
     if (isBlocked) {
       throw new ForbiddenException('You cannot like this post');
+    }
+
+    const isPrivateAndNotFollowing = await this.postsRepository.isPrivateAndNotFollowing(
+      this.prisma,
+      userId,
+      post.authorId,
+    );
+    if (isPrivateAndNotFollowing) {
+      throw new NotFoundException('Post', postId);
     }
 
     const notification = await this.prisma.$transaction(async (tx) => {

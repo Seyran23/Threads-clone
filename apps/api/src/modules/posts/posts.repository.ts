@@ -109,6 +109,29 @@ export class PostsRepository {
     return block !== null;
   }
 
+  async isPrivateAndNotFollowing(
+    tx: PrismaClientOrTx,
+    viewerId: string,
+    authorId: string,
+  ): Promise<boolean> {
+    if (viewerId === authorId) {
+      return false;
+    }
+
+    const author = await tx.user.findUnique({
+      where: { id: authorId },
+      select: { isPrivate: true },
+    });
+    if (!author?.isPrivate) {
+      return false;
+    }
+
+    const follow = await tx.follow.findUnique({
+      where: { followerId_followeeId: { followerId: viewerId, followeeId: authorId } },
+    });
+    return follow === null;
+  }
+
   async findBlockedAuthorIds(
     tx: PrismaClientOrTx,
     viewerId: string,

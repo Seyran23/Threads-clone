@@ -90,7 +90,9 @@ export class UsersService {
       throw new NotFoundException('User', username);
     }
 
-    if (viewerId !== user.id) {
+    const isOwnProfile = viewerId === user.id;
+
+    if (!isOwnProfile) {
       const isBlocked = await this.usersRepository.isBlockedEitherDirection(viewerId, user.id);
       if (isBlocked) {
         throw new NotFoundException('User', username);
@@ -100,12 +102,21 @@ export class UsersService {
     const [followerCount, followingCount, isFollowing] = await Promise.all([
       this.usersRepository.countFollowers(user.id),
       this.usersRepository.countFollowing(user.id),
-      viewerId === user.id
-        ? Promise.resolve(false)
-        : this.usersRepository.isFollowing(viewerId, user.id),
+      isOwnProfile ? Promise.resolve(false) : this.usersRepository.isFollowing(viewerId, user.id),
     ]);
 
-    return UserProfileResponse.from(user, followerCount, followingCount, isFollowing);
+    const hasPendingRequest =
+      isOwnProfile || !user.isPrivate
+        ? false
+        : await this.usersRepository.hasPendingFollowRequest(viewerId, user.id);
+
+    return UserProfileResponse.from(user, {
+      followerCount,
+      followingCount,
+      isFollowing,
+      hasPendingRequest,
+      canViewPosts: isOwnProfile || !user.isPrivate || isFollowing,
+    });
   }
 
   async getUserPosts(
@@ -119,23 +130,30 @@ export class UsersService {
       throw new NotFoundException('User', username);
     }
 
-    if (viewerId !== user.id) {
+    const isOwnProfile = viewerId === user.id;
+
+    if (!isOwnProfile) {
       const isBlocked = await this.usersRepository.isBlockedEitherDirection(viewerId, user.id);
       if (isBlocked) {
         throw new NotFoundException('User', username);
       }
     }
 
+    const isFollowingAuthor = isOwnProfile
+      ? false
+      : await this.usersRepository.isFollowing(viewerId, user.id);
+
+    if (user.isPrivate && !isOwnProfile && !isFollowingAuthor) {
+      return { items: [], nextCursor: null };
+    }
+
     const beforeMs = decodeUserPostsCursor(cursor);
     const posts = await this.postsRepository.findByAuthor(this.prisma, user.id, beforeMs, limit);
     const postIds = posts.map((post) => post.id);
 
-    const [likeCounts, likedPostIds, isFollowingAuthor, savedPostIds] = await Promise.all([
+    const [likeCounts, likedPostIds, savedPostIds] = await Promise.all([
       this.likesRepository.getCounts(postIds),
       this.likesRepository.findLikedPostIds(this.prisma, viewerId, postIds),
-      viewerId === user.id
-        ? Promise.resolve(false)
-        : this.usersRepository.isFollowing(viewerId, user.id),
       this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, postIds),
     ]);
 
@@ -212,6 +230,7 @@ export class UsersService {
     const updated = await this.usersRepository.update(userId, {
       ...(dto.username ? { username: dto.username } : {}),
       ...(dto.avatarKey ? { avatarUrl: this.s3Service.getPublicUrl(dto.avatarKey) } : {}),
+      ...(dto.isPrivate !== undefined ? { isPrivate: dto.isPrivate } : {}),
     });
 
     if (dto.username) {
@@ -230,7 +249,13 @@ export class UsersService {
       this.usersRepository.countFollowing(userId),
     ]);
 
-    return UserProfileResponse.from(updated, followerCount, followingCount, false);
+    return UserProfileResponse.from(updated, {
+      followerCount,
+      followingCount,
+      isFollowing: false,
+      hasPendingRequest: false,
+      canViewPosts: true,
+    });
   }
 
   async presignAvatarUpload(

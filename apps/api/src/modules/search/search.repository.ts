@@ -42,6 +42,14 @@ export class SearchRepository {
           WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = p.author_id)
              OR (b.blocked_id = ${viewerId} AND b.blocker_id = p.author_id)
         )
+        AND (
+          u.is_private = false
+          OR p.author_id = ${viewerId}
+          OR EXISTS (
+            SELECT 1 FROM follows f
+            WHERE f.follower_id = ${viewerId} AND f.followee_id = p.author_id
+          )
+        )
       ORDER BY ts_rank(p.search_vector, to_tsquery('english', ${tsQuery})) DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

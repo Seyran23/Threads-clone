@@ -56,4 +56,11 @@ export class UsersRepository {
     });
     return block !== null;
   }
+
+  async hasPendingFollowRequest(requesterId: string, targetId: string): Promise<boolean> {
+    const request = await this.prisma.followRequest.findUnique({
+      where: { requesterId_targetId: { requesterId, targetId } },
+    });
+    return request !== null;
+  }
 }

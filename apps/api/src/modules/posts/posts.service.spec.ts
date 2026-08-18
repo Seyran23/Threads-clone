@@ -96,6 +96,7 @@ describe('PostsService', () => {
       findReplies: jest.fn(),
       findFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
       isBlockedEitherDirection: jest.fn().mockResolvedValue(false),
+      isPrivateAndNotFollowing: jest.fn().mockResolvedValue(false),
       findBlockedAuthorIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<PostsRepository>;
 
@@ -298,6 +299,16 @@ describe('PostsService', () => {
       expect(postsRepository.create).not.toHaveBeenCalled();
     });
 
+    it('throws NotFoundException when the parent author is private and not followed', async () => {
+      postsRepository.isPrivateAndNotFollowing.mockResolvedValue(true);
+
+      await expect(
+        postsService.createReply('user-1', 'parent-1', { content: 'hi' }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(postsRepository.create).not.toHaveBeenCalled();
+    });
+
     it('validates media ownership before creating anything', async () => {
       mediaService.assertOwnedByUser.mockImplementation(() => {
         throw new ForbiddenException('nope');
@@ -387,6 +398,12 @@ describe('PostsService', () => {
       await expect(postsService.getPost('user-1', 'post-1')).rejects.toThrow(NotFoundException);
     });
 
+    it('throws NotFoundException when the author is private and not followed', async () => {
+      postsRepository.isPrivateAndNotFollowing.mockResolvedValue(true);
+
+      await expect(postsService.getPost('user-1', 'post-1')).rejects.toThrow(NotFoundException);
+    });
+
     it('sets isLiked true when the viewer has liked the post', async () => {
       likesRepository.getCount.mockResolvedValue(5);
       likesRepository.findLikedPostIds.mockResolvedValue(new Set(['post-1']));
@@ -444,6 +461,14 @@ describe('PostsService', () => {
 
     it('throws NotFoundException when the viewer and the parent author have blocked each other', async () => {
       postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(postsService.getReplies('user-1', 'parent-1', undefined, 20)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException when the parent author is private and not followed', async () => {
+      postsRepository.isPrivateAndNotFollowing.mockResolvedValue(true);
 
       await expect(postsService.getReplies('user-1', 'parent-1', undefined, 20)).rejects.toThrow(
         NotFoundException,
@@ -527,6 +552,13 @@ describe('PostsService', () => {
       postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
 
       await expect(postsService.likePost('user-1', 'post-1')).rejects.toThrow(ForbiddenException);
+      expect(likesRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the post author is private and not followed', async () => {
+      postsRepository.isPrivateAndNotFollowing.mockResolvedValue(true);
+
+      await expect(postsService.likePost('user-1', 'post-1')).rejects.toThrow(NotFoundException);
       expect(likesRepository.create).not.toHaveBeenCalled();
     });
 

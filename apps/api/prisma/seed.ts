@@ -194,18 +194,16 @@ async function main() {
 
     const hue = Math.round((index / USERNAMES.length) * 360);
     const avatarKey = `avatars/${user.id}/seed-avatar.png`;
-    await s3Service.putObject(
-      avatarKey,
-      makeSolidPng(256, hslToRgb(hue, 0.55, 0.55)),
-      'image/png',
-    );
+    await s3Service.putObject(avatarKey, makeSolidPng(256, hslToRgb(hue, 0.55, 0.55)), 'image/png');
     await usersService.updateProfile(user.id, { avatarKey });
 
     users.push({ id: user.id, username, email });
   }
 
-  const [alice, ...rest] = users;
-  console.log(`Everyone follows ${alice.username}, plus a random follow graph...`);
+  const [alice, pendingRequester, ...rest] = users;
+  console.log(
+    `Everyone follows ${alice.username} (except ${pendingRequester.username}, held back for a pending follow request demo), plus a random follow graph...`,
+  );
   for (const user of rest) {
     await followsService.followUser(user.id, alice.id);
   }
@@ -309,9 +307,18 @@ async function main() {
     }
   }
 
+  console.log(
+    `Making ${alice.username} private and queuing a pending follow request from ${pendingRequester.username}...`,
+  );
+  await usersService.updateProfile(alice.id, { isPrivate: true });
+  await followsService.followUser(pendingRequester.id, alice.id);
+
   const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(`\nDone in ${elapsedSeconds}s.`);
   console.log(`Seeded ${users.length} users, ${posts.length} posts, ${replies.length} replies.`);
+  console.log(
+    `${alice.username} is private with a pending follow request from ${pendingRequester.username} — log in as ${alice.username} and check Activity to see it.`,
+  );
   console.log(`\nAll seed users share the password: ${SEED_PASSWORD}`);
   console.log('Log in as any of:');
   users.forEach((u) => console.log(`  ${u.username}  <${u.email}>`));

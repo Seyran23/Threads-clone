@@ -12,9 +12,11 @@ import { NotificationDeliveryQueue } from '@/modules/notifications/delivery/queu
 import { NotificationsRepository } from '@/modules/notifications/notifications.repository';
 import { UsersService } from '@/modules/users/users.service';
 
+import { FollowRequestsRepository } from './follow-requests.repository';
 import { FollowsRepository } from './follows.repository';
 import { GraphSyncOutboxRepository } from './graph-sync/graph-sync-outbox.repository';
 import { GraphSyncQueue } from './graph-sync/queue/graph-sync.queue';
+import { FollowRequestResponse } from './response/follow-request.response';
 import { FollowResponse } from './response/follow.response';
 
 @Injectable()
@@ -22,6 +24,7 @@ export class FollowsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly followsRepository: FollowsRepository,
+    private readonly followRequestsRepository: FollowRequestsRepository,
     private readonly graphSyncOutboxRepository: GraphSyncOutboxRepository,
     private readonly graphSyncQueue: GraphSyncQueue,
     private readonly notificationsRepository: NotificationsRepository,
@@ -54,6 +57,10 @@ export class FollowsService {
       throw new ConflictException('Already following this user');
     }
 
+    if (followee.isPrivate) {
+      return this.createFollowRequest(followerId, followeeId);
+    }
+
     const { outboxId, notification } = await this.prisma.$transaction(async (tx) => {
       await this.followsRepository.create(tx, { followerId, followeeId });
       const outbox = await this.graphSyncOutboxRepository.create(tx, {
@@ -75,7 +82,7 @@ export class FollowsService {
     }
 
     this.logger.info({ followerId, followeeId }, 'User followed');
-    return { following: true };
+    return { following: true, requested: false };
   }
 
   async unfollowUser(followerId: string, followeeId: string): Promise<FollowResponse> {
@@ -91,8 +98,68 @@ export class FollowsService {
       });
       await this.graphSyncQueue.enqueueSyncEvent(outbox.id);
       this.logger.info({ followerId, followeeId }, 'User unfollowed');
+      return { following: false, requested: false };
     }
 
-    return { following: false };
+    await this.followRequestsRepository.delete(this.prisma, followerId, followeeId);
+    return { following: false, requested: false };
+  }
+
+  listFollowRequests(targetId: string): Promise<FollowRequestResponse[]> {
+    return this.followRequestsRepository.findByTarget(this.prisma, targetId);
+  }
+
+  async acceptFollowRequest(targetId: string, requesterId: string): Promise<void> {
+    const request = await this.followRequestsRepository.findOne(this.prisma, requesterId, targetId);
+    if (!request) {
+      throw new NotFoundException('FollowRequest', requesterId);
+    }
+
+    const outbox = await this.prisma.$transaction(async (tx) => {
+      await this.followRequestsRepository.delete(tx, requesterId, targetId);
+      await this.followsRepository.create(tx, { followerId: requesterId, followeeId: targetId });
+      return this.graphSyncOutboxRepository.create(tx, {
+        eventType: 'FOLLOW_CREATED',
+        payload: { followerId: requesterId, followeeId: targetId },
+      });
+    });
+
+    await this.graphSyncQueue.enqueueSyncEvent(outbox.id);
+    this.logger.info({ requesterId, targetId }, 'Follow request accepted');
+  }
+
+  async rejectFollowRequest(targetId: string, requesterId: string): Promise<void> {
+    await this.followRequestsRepository.delete(this.prisma, requesterId, targetId);
+    this.logger.info({ requesterId, targetId }, 'Follow request rejected');
+  }
+
+  private async createFollowRequest(
+    requesterId: string,
+    targetId: string,
+  ): Promise<FollowResponse> {
+    const existingRequest = await this.followRequestsRepository.findOne(
+      this.prisma,
+      requesterId,
+      targetId,
+    );
+    if (existingRequest) {
+      throw new ConflictException('Follow request already sent');
+    }
+
+    const notification = await this.prisma.$transaction(async (tx) => {
+      await this.followRequestsRepository.create(tx, requesterId, targetId);
+      return this.notificationsRepository.createIfNotSelf(tx, {
+        actorId: requesterId,
+        recipientId: targetId,
+        type: 'FOLLOW_REQUEST',
+      });
+    });
+
+    if (notification) {
+      await this.notificationDeliveryQueue.enqueueDelivery(notification.id);
+    }
+
+    this.logger.info({ requesterId, targetId }, 'Follow request created');
+    return { following: false, requested: true };
   }
 }

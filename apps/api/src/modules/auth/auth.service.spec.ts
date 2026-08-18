@@ -25,6 +25,7 @@ describe('AuthService', () => {
     username: 'alice',
     passwordHash: 'hashed-password',
     avatarUrl: null,
+    isPrivate: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
