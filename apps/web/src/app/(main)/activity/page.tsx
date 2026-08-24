@@ -7,6 +7,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Heart, MessageCircle, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect } from 'react';
@@ -15,11 +16,13 @@ import type { FollowRequest, Notification, NotificationsPage } from '@threads-cl
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { RowSkeletonList } from '@/components/ui/row-skeleton';
 import { acceptFollowRequest, getFollowRequests, rejectFollowRequest } from '@/lib/api/follows';
 import { getNotifications } from '@/lib/api/notifications';
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel';
 import { clearNewNotificationBadge } from '@/lib/hooks/use-notification-socket';
 import { queryKeys } from '@/lib/query-keys';
+import { describeNotification } from '@/lib/utils/notification-text';
 import { formatRelativeTime } from '@/lib/utils/relative-time';
 
 const ICON_BY_TYPE = {
@@ -28,19 +31,6 @@ const ICON_BY_TYPE = {
   FOLLOW: UserPlus,
   FOLLOW_REQUEST: UserPlus,
 };
-
-function describe(notification: Notification): string {
-  switch (notification.type) {
-    case 'LIKE':
-      return 'liked your post';
-    case 'REPLY':
-      return 'replied to your post';
-    case 'FOLLOW':
-      return 'followed you';
-    case 'FOLLOW_REQUEST':
-      return 'wants to follow you';
-  }
-}
 
 function updateFollowRequestNotification(
   queryClient: QueryClient,
@@ -181,15 +171,22 @@ export default function ActivityPage() {
           <h2 className="border-b border-border px-4 py-2 text-sm font-semibold text-muted-foreground">
             Follow requests
           </h2>
-          {followRequestsQuery.data.map((request) => (
-            <FollowRequestRow key={request.id} request={request} />
-          ))}
+          <AnimatePresence initial={false}>
+            {followRequestsQuery.data.map((request) => (
+              <motion.div
+                key={request.id}
+                layout
+                exit={{ opacity: 0, x: 24, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <FollowRequestRow request={request} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
-      {notificationsQuery.isLoading && (
-        <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-      )}
+      {notificationsQuery.isLoading && <RowSkeletonList />}
       {notificationsQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load activity.</p>
       )}
@@ -221,7 +218,9 @@ export default function ActivityPage() {
             </Avatar>
             <p className="min-w-0 flex-1 text-[15px]">
               <span className="font-semibold">{notification.actor.username}</span>{' '}
-              <span className="text-muted-foreground">{describe(notification)}</span>
+              <span className="text-muted-foreground">
+                {describeNotification(notification.type)}
+              </span>
             </p>
             <span className="shrink-0 text-xs text-muted-foreground">
               {formatRelativeTime(notification.createdAt)}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import {
   Bookmark,
   Check,
@@ -123,7 +124,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
   };
 
   return (
-    <div
+    <motion.div
       role="link"
       tabIndex={0}
       onClick={() => router.push(`/post/${post.id}`)}
@@ -132,6 +133,9 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
           router.push(`/post/${post.id}`);
         }
       }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
       className={cn(
         'flex cursor-pointer gap-3 border-b border-border hover:bg-muted/40',
         compact ? 'px-4 py-2.5' : 'p-4',
@@ -262,9 +266,15 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
             )}
             aria-label={post.isLiked ? 'Unlike' : 'Like'}
           >
-            <Heart
-              className={cn(compact ? 'size-5' : 'size-5.5', post.isLiked && 'fill-current')}
-            />
+            <motion.span
+              animate={post.isLiked ? { scale: [1, 1.3, 1] } : { scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="inline-flex"
+            >
+              <Heart
+                className={cn(compact ? 'size-5' : 'size-5.5', post.isLiked && 'fill-current')}
+              />
+            </motion.span>
             {post.likeCount > 0 && post.likeCount}
           </button>
 
@@ -295,6 +305,6 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
         open={reportDialogOpen}
         onOpenChange={setReportDialogOpen}
       />
-    </div>
+    </motion.div>
   );
 }
