@@ -20,6 +20,7 @@ describe('RealtimeGateway', () => {
       data: {},
       join: jest.fn(),
       leave: jest.fn(),
+      emit: jest.fn(),
       disconnect: jest.fn(),
       ...overrides,
     }) as unknown as Socket;
@@ -32,6 +33,7 @@ describe('RealtimeGateway', () => {
     presenceService = {
       addConnection: jest.fn().mockResolvedValue(true),
       removeConnection: jest.fn().mockResolvedValue(true),
+      isOnline: jest.fn().mockResolvedValue(false),
       touchLastSeen: jest.fn(),
     } as unknown as jest.Mocked<PresenceService>;
 
@@ -150,6 +152,24 @@ describe('RealtimeGateway', () => {
       await gateway.handleSubscribe(client, 'target-user');
 
       expect(client.join).toHaveBeenCalledWith('presence:target-user');
+    });
+
+    it('emits the current online state back to the subscribing client', async () => {
+      const client = makeClient();
+      presenceService.isOnline.mockResolvedValue(true);
+
+      await gateway.handleSubscribe(client, 'target-user');
+
+      expect(client.emit).toHaveBeenCalledWith('presence:online', { userId: 'target-user' });
+    });
+
+    it('emits the current offline state back to the subscribing client', async () => {
+      const client = makeClient();
+      presenceService.isOnline.mockResolvedValue(false);
+
+      await gateway.handleSubscribe(client, 'target-user');
+
+      expect(client.emit).toHaveBeenCalledWith('presence:offline', { userId: 'target-user' });
     });
 
     it('leaves the target user presence room on unsubscribe', async () => {

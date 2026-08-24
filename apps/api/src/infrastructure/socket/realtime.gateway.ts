@@ -92,6 +92,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @MessageBody() targetUserId: string,
   ): Promise<void> {
     await client.join(this.presenceRoom(targetUserId));
+
+    const isOnline = await this.presenceService.isOnline(targetUserId);
+    client.emit(isOnline ? PRESENCE_ONLINE_EVENT : PRESENCE_OFFLINE_EVENT, {
+      userId: targetUserId,
+    });
   }
 
   @SubscribeMessage(PRESENCE_UNSUBSCRIBE_EVENT)
