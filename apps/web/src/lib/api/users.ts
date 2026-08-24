@@ -35,6 +35,24 @@ export function getUserPosts(
   return apiFetch<UserPostsPage>(`/users/${username}/posts${queryString ? `?${queryString}` : ''}`);
 }
 
+export function getUserReplies(
+  username: string,
+  params: GetUserPostsParams = {},
+): Promise<UserPostsPage> {
+  const query = new URLSearchParams();
+  if (params.cursor) {
+    query.set('cursor', params.cursor);
+  }
+  if (params.limit) {
+    query.set('limit', String(params.limit));
+  }
+
+  const queryString = query.toString();
+  return apiFetch<UserPostsPage>(
+    `/users/${username}/replies${queryString ? `?${queryString}` : ''}`,
+  );
+}
+
 export function getSavedPosts(params: GetUserPostsParams = {}): Promise<UserPostsPage> {
   const query = new URLSearchParams();
   if (params.cursor) {
@@ -46,4 +64,17 @@ export function getSavedPosts(params: GetUserPostsParams = {}): Promise<UserPost
 
   const queryString = query.toString();
   return apiFetch<UserPostsPage>(`/users/me/saved-posts${queryString ? `?${queryString}` : ''}`);
+}
+
+export function getMyLikedPosts(params: GetUserPostsParams = {}): Promise<UserPostsPage> {
+  const query = new URLSearchParams();
+  if (params.cursor) {
+    query.set('cursor', params.cursor);
+  }
+  if (params.limit) {
+    query.set('limit', String(params.limit));
+  }
+
+  const queryString = query.toString();
+  return apiFetch<UserPostsPage>(`/users/me/likes${queryString ? `?${queryString}` : ''}`);
 }

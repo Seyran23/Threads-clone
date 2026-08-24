@@ -17,10 +17,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { blockUser } from '@/lib/api/blocks';
 import { followUser, unfollowUser } from '@/lib/api/follows';
-import { getUserPosts, getUserProfile } from '@/lib/api/users';
+import { getMyLikedPosts, getUserPosts, getUserProfile, getUserReplies } from '@/lib/api/users';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel';
 import { queryKeys } from '@/lib/query-keys';
+import { cn } from '@/lib/utils';
 import { updateAuthorFollowInCaches } from '@/lib/utils/optimistic-post-update';
 
 import { EditProfileDialog } from './edit-profile-dialog';
@@ -30,11 +31,14 @@ interface ProfileViewProps {
   username: string;
 }
 
+type ProfileTab = 'posts' | 'replies' | 'likes';
+
 export function ProfileView({ username }: ProfileViewProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const isOwnProfile = currentUser?.user.username === username;
 
   const profileQuery = useQuery({
@@ -42,22 +46,45 @@ export function ProfileView({ username }: ProfileViewProps) {
     queryFn: () => getUserProfile(username),
   });
 
+  const canViewPosts = profileQuery.isSuccess && !!profileQuery.data?.canViewPosts;
+
   const postsQuery = useInfiniteQuery({
     queryKey: queryKeys.userPosts(username),
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
       getUserPosts(username, { cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: profileQuery.isSuccess && !!profileQuery.data?.canViewPosts,
+    enabled: canViewPosts && activeTab === 'posts',
   });
+
+  const repliesQuery = useInfiniteQuery({
+    queryKey: queryKeys.userReplies(username),
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      getUserReplies(username, { cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: canViewPosts && activeTab === 'replies',
+  });
+
+  const likesQuery = useInfiniteQuery({
+    queryKey: queryKeys.myLikedPosts,
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      getMyLikedPosts({ cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: isOwnProfile && activeTab === 'likes',
+  });
+
+  const activeQuery =
+    activeTab === 'posts' ? postsQuery : activeTab === 'replies' ? repliesQuery : likesQuery;
 
   const sentinelRef = useInfiniteScrollSentinel({
     onIntersect: () => {
-      if (postsQuery.hasNextPage && !postsQuery.isFetchingNextPage) {
-        void postsQuery.fetchNextPage();
+      if (activeQuery.hasNextPage && !activeQuery.isFetchingNextPage) {
+        void activeQuery.fetchNextPage();
       }
     },
-    enabled: !!postsQuery.hasNextPage,
+    enabled: !!activeQuery.hasNextPage,
   });
 
   const followMutation = useMutation({
@@ -149,7 +176,7 @@ export function ProfileView({ username }: ProfileViewProps) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const posts = postsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const posts = activeQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <div className="mx-auto w-full max-w-xl pb-10">
@@ -253,21 +280,45 @@ export function ProfileView({ username }: ProfileViewProps) {
         </div>
       ) : (
         <>
-          {postsQuery.isLoading && (
-            <p className="p-4 text-sm text-muted-foreground">Loading posts…</p>
+          <div className="flex border-b border-border">
+            {(['posts', 'replies', ...(isOwnProfile ? (['likes'] as const) : [])] as const).map(
+              (tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'flex-1 border-b-2 py-3 text-center text-sm font-medium capitalize',
+                    activeTab === tab
+                      ? 'border-foreground text-foreground'
+                      : 'border-transparent text-muted-foreground',
+                  )}
+                >
+                  {tab}
+                </button>
+              ),
+            )}
+          </div>
+
+          {activeQuery.isLoading && (
+            <p className="p-4 text-sm text-muted-foreground">Loading {activeTab}…</p>
           )}
-          {postsQuery.isError && (
-            <p className="p-4 text-sm text-destructive">Couldn&apos;t load posts.</p>
+          {activeQuery.isError && (
+            <p className="p-4 text-sm text-destructive">Couldn&apos;t load {activeTab}.</p>
           )}
-          {postsQuery.data && posts.length === 0 && (
-            <p className="p-8 text-center text-sm text-muted-foreground">No threads yet.</p>
+          {activeQuery.data && posts.length === 0 && (
+            <p className="p-8 text-center text-sm text-muted-foreground">
+              {activeTab === 'posts' && 'No threads yet.'}
+              {activeTab === 'replies' && 'No replies yet.'}
+              {activeTab === 'likes' && 'Posts you like will show up here.'}
+            </p>
           )}
           {posts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
 
           <div ref={sentinelRef} className="h-1" />
-          {postsQuery.isFetchingNextPage && (
+          {activeQuery.isFetchingNextPage && (
             <p className="p-4 text-center text-sm text-muted-foreground">Loading more…</p>
           )}
         </>

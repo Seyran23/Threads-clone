@@ -5,6 +5,8 @@ export const queryKeys = {
   replies: (parentId: string) => ['replies', parentId] as const,
   profile: (username: string) => ['profile', username] as const,
   userPosts: (username: string) => ['userPosts', username] as const,
+  userReplies: (username: string) => ['userReplies', username] as const,
+  myLikedPosts: ['myLikedPosts'] as const,
   search: (q: string) => ['search', q] as const,
   notifications: ['notifications'] as const,
   hasNewNotification: ['hasNewNotification'] as const,
