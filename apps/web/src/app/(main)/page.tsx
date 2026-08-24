@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 
 import { ThreadsLogo } from '@/components/layout/threads-logo';
 import { PostCard } from '@/components/posts/post-card';
+import { PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
 import { PostComposer } from '@/components/posts/post-composer';
 import {
   DropdownMenu,
@@ -113,7 +114,7 @@ export default function HomePage() {
 
       <PostComposer />
 
-      {feedQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading feed…</p>}
+      {feedQuery.isLoading && <PostCardSkeletonList />}
       {feedQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load the feed.</p>
       )}

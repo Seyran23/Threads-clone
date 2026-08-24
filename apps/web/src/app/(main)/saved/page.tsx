@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 import { PostCard } from '@/components/posts/post-card';
+import { PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
 import { getSavedPosts } from '@/lib/api/users';
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel';
 import { queryKeys } from '@/lib/query-keys';
@@ -38,7 +39,7 @@ export default function SavedPostsPage() {
         <h1 className="text-base font-semibold">Saved</h1>
       </div>
 
-      {savedQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+      {savedQuery.isLoading && <PostCardSkeletonList />}
       {savedQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load saved posts.</p>
       )}

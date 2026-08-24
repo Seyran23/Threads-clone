@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 import { PostCard } from '@/components/posts/post-card';
+import { PostCardSkeleton, PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
 import { PostComposer } from '@/components/posts/post-composer';
 import { getPost, getReplies } from '@/lib/api/posts';
 import { queryKeys } from '@/lib/query-keys';
@@ -29,7 +30,7 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
         <h1 className="text-base font-semibold">Thread</h1>
       </div>
 
-      {postQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+      {postQuery.isLoading && <PostCardSkeleton />}
       {postQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load this post.</p>
       )}
@@ -40,9 +41,7 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
         />
       )}
 
-      {repliesQuery.isLoading && (
-        <p className="p-4 text-sm text-muted-foreground">Loading replies…</p>
-      )}
+      {repliesQuery.isLoading && <PostCardSkeletonList count={2} />}
       {repliesQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load replies.</p>
       )}

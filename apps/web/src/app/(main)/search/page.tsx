@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { RowSkeletonList } from '@/components/ui/row-skeleton';
 import { search } from '@/lib/api/search';
 import { queryKeys } from '@/lib/query-keys';
 import { formatRelativeTime } from '@/lib/utils/relative-time';
@@ -51,7 +52,7 @@ export default function SearchPage() {
         <p className="p-8 text-center text-sm text-muted-foreground">Search for posts or people.</p>
       )}
 
-      {searchQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Searching…</p>}
+      {searchQuery.isLoading && <RowSkeletonList />}
       {searchQuery.isError && (
         <p className="p-4 text-sm text-destructive">Something went wrong. Try again.</p>
       )}

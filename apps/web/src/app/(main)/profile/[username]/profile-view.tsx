@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { PostCard } from '@/components/posts/post-card';
+import { PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { updateAuthorFollowInCaches } from '@/lib/utils/optimistic-post-update';
 
 import { EditProfileDialog } from './edit-profile-dialog';
+import { ProfileHeaderSkeleton } from './profile-header-skeleton';
 import { SuggestedUsers } from './suggested-users';
 
 interface ProfileViewProps {
@@ -187,7 +189,7 @@ export function ProfileView({ username }: ProfileViewProps) {
         <h1 className="text-base font-semibold">{username}</h1>
       </div>
 
-      {profileQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+      {profileQuery.isLoading && <ProfileHeaderSkeleton />}
       {profileQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t find this profile.</p>
       )}
@@ -300,9 +302,7 @@ export function ProfileView({ username }: ProfileViewProps) {
             )}
           </div>
 
-          {activeQuery.isLoading && (
-            <p className="p-4 text-sm text-muted-foreground">Loading {activeTab}…</p>
-          )}
+          {(profileQuery.isLoading || activeQuery.isLoading) && <PostCardSkeletonList />}
           {activeQuery.isError && (
             <p className="p-4 text-sm text-destructive">Couldn&apos;t load {activeTab}.</p>
           )}

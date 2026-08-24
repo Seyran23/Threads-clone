@@ -8,6 +8,7 @@ import type { BlockedUser } from '@threads-clone/shared-types';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { RowSkeletonList } from '@/components/ui/row-skeleton';
 import { getBlockedUsers, unblockUser } from '@/lib/api/blocks';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -57,7 +58,7 @@ export default function BlockedAccountsPage() {
         <h1 className="text-base font-semibold">Blocked accounts</h1>
       </div>
 
-      {blockedQuery.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+      {blockedQuery.isLoading && <RowSkeletonList />}
       {blockedQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load blocked accounts.</p>
       )}
