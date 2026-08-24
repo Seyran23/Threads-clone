@@ -4,6 +4,9 @@ import { Like } from '@/generated/prisma';
 import { PrismaClientOrTx } from '@/infrastructure/prisma/prisma.types';
 import { RedisService } from '@/infrastructure/redis/redis.service';
 
+import { POST_INCLUDE } from './posts.repository';
+import { PostWithRelations } from './response/post.response';
+
 @Injectable()
 export class LikesRepository {
   constructor(private readonly redis: RedisService) {}
@@ -68,6 +71,24 @@ export class LikesRepository {
       select: { postId: true },
     });
     return new Set(likes.map((like) => like.postId));
+  }
+
+  async findPostsLikedByUser(
+    tx: PrismaClientOrTx,
+    userId: string,
+    beforeMs: number | undefined,
+    limit: number,
+  ): Promise<{ post: PostWithRelations; likedAt: Date }[]> {
+    const rows = await tx.like.findMany({
+      where: {
+        userId,
+        ...(beforeMs !== undefined ? { createdAt: { lt: new Date(beforeMs) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { post: { include: POST_INCLUDE } },
+    });
+    return rows.map((row) => ({ post: row.post, likedAt: row.createdAt }));
   }
 
   private likeCountKey(postId: string): string {

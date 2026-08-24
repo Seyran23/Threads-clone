@@ -76,6 +76,24 @@ export class PostsRepository {
     });
   }
 
+  findRepliesByAuthor(
+    tx: PrismaClientOrTx,
+    authorId: string,
+    beforeMs: number | undefined,
+    limit: number,
+  ): Promise<PostWithRelations[]> {
+    return tx.post.findMany({
+      where: {
+        authorId,
+        parentId: { not: null },
+        ...(beforeMs !== undefined ? { createdAt: { lt: new Date(beforeMs) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: POST_INCLUDE,
+    });
+  }
+
   async findFollowedAuthorIds(
     tx: PrismaClientOrTx,
     viewerId: string,

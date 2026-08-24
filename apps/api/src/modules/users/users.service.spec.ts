@@ -52,6 +52,7 @@ describe('UsersService', () => {
 
     postsRepository = {
       findByAuthor: jest.fn().mockResolvedValue([]),
+      findRepliesByAuthor: jest.fn().mockResolvedValue([]),
       findFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
       findBlockedAuthorIds: jest.fn().mockResolvedValue(new Set()),
     } as unknown as jest.Mocked<PostsRepository>;
@@ -59,6 +60,7 @@ describe('UsersService', () => {
     likesRepository = {
       getCounts: jest.fn().mockResolvedValue(new Map()),
       findLikedPostIds: jest.fn().mockResolvedValue(new Set()),
+      findPostsLikedByUser: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<LikesRepository>;
 
     savedPostsRepository = {
@@ -293,6 +295,45 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getUserReplies', () => {
+    it('throws NotFoundException when the username does not exist', async () => {
+      usersRepository.findByUsername.mockResolvedValue(null);
+
+      await expect(
+        usersService.getUserReplies('missing', 'viewer-1', undefined, 20),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the viewer and the profile owner have blocked each other', async () => {
+      usersRepository.findByUsername.mockResolvedValue(user);
+      usersRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(usersService.getUserReplies('alice', 'viewer-1', undefined, 20)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns an empty list without querying replies for a private account you do not follow', async () => {
+      usersRepository.findByUsername.mockResolvedValue({ ...user, isPrivate: true });
+      usersRepository.isFollowing.mockResolvedValue(false);
+
+      const result = await usersService.getUserReplies('alice', 'viewer-1', undefined, 20);
+
+      expect(postsRepository.findRepliesByAuthor).not.toHaveBeenCalled();
+      expect(result).toEqual({ items: [], nextCursor: null });
+    });
+
+    it('returns a null nextCursor when fewer than a full page came back', async () => {
+      usersRepository.findByUsername.mockResolvedValue(user);
+      postsRepository.findRepliesByAuthor.mockResolvedValue([]);
+
+      const result = await usersService.getUserReplies('alice', 'viewer-1', undefined, 20);
+
+      expect(result.nextCursor).toBeNull();
+      expect(result.items).toEqual([]);
+    });
+  });
+
   describe('getSavedPosts', () => {
     it('excludes saved posts from an author blocked in either direction with the viewer', async () => {
       const savedAt = new Date('2026-07-08T10:00:00.000Z');
@@ -322,6 +363,64 @@ describe('UsersService', () => {
         'author-1',
       ]);
       expect(result.items).toHaveLength(0);
+    });
+  });
+
+  describe('getMyLikedPosts', () => {
+    it('excludes liked posts from an author blocked in either direction with the viewer', async () => {
+      const likedAt = new Date('2026-07-08T10:00:00.000Z');
+      likesRepository.findPostsLikedByUser.mockResolvedValue([
+        {
+          post: {
+            id: 'post-1',
+            authorId: 'author-1',
+            content: 'hi',
+            parentId: null,
+            depth: 0,
+            replyCount: 0,
+            createdAt: likedAt,
+            updatedAt: likedAt,
+            author: user,
+            hashtags: [],
+            media: [],
+          },
+          likedAt,
+        },
+      ] as never);
+      postsRepository.findBlockedAuthorIds.mockResolvedValue(new Set(['author-1']));
+
+      const result = await usersService.getMyLikedPosts('viewer-1', undefined, 20);
+
+      expect(postsRepository.findBlockedAuthorIds).toHaveBeenCalledWith(prisma, 'viewer-1', [
+        'author-1',
+      ]);
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('marks every returned post as liked', async () => {
+      const likedAt = new Date('2026-07-08T10:00:00.000Z');
+      likesRepository.findPostsLikedByUser.mockResolvedValue([
+        {
+          post: {
+            id: 'post-1',
+            authorId: 'author-1',
+            content: 'hi',
+            parentId: null,
+            depth: 0,
+            replyCount: 0,
+            createdAt: likedAt,
+            updatedAt: likedAt,
+            author: user,
+            hashtags: [],
+            media: [],
+          },
+          likedAt,
+        },
+      ] as never);
+
+      const result = await usersService.getMyLikedPosts('viewer-1', undefined, 20);
+
+      expect(result.items[0].isLiked).toBe(true);
     });
   });
 

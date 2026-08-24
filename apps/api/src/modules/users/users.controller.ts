@@ -66,6 +66,14 @@ export class UsersController {
     return this.usersService.getSavedPosts(user.id, query.cursor, query.limit);
   }
 
+  @Get('me/likes')
+  getMyLikedPosts(
+    @CurrentUser() user: { id: string },
+    @Query() query: GetSavedPostsQueryDto,
+  ): Promise<UserPostsResponse> {
+    return this.usersService.getMyLikedPosts(user.id, query.cursor, query.limit);
+  }
+
   @Get(':username')
   getProfile(
     @CurrentUser() user: { id: string },
@@ -81,5 +89,14 @@ export class UsersController {
     @Query() query: GetUserPostsQueryDto,
   ): Promise<UserPostsResponse> {
     return this.usersService.getUserPosts(username, user.id, query.cursor, query.limit);
+  }
+
+  @Get(':username/replies')
+  getUserReplies(
+    @CurrentUser() user: { id: string },
+    @Param('username') username: string,
+    @Query() query: GetUserPostsQueryDto,
+  ): Promise<UserPostsResponse> {
+    return this.usersService.getUserReplies(username, user.id, query.cursor, query.limit);
   }
 }

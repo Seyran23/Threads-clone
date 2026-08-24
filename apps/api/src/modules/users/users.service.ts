@@ -174,6 +174,66 @@ export class UsersService {
     return { items, nextCursor };
   }
 
+  async getUserReplies(
+    username: string,
+    viewerId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<UserPostsResponse> {
+    const user = await this.usersRepository.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException('User', username);
+    }
+
+    const isOwnProfile = viewerId === user.id;
+
+    if (!isOwnProfile) {
+      const isBlocked = await this.usersRepository.isBlockedEitherDirection(viewerId, user.id);
+      if (isBlocked) {
+        throw new NotFoundException('User', username);
+      }
+    }
+
+    const isFollowingAuthor = isOwnProfile
+      ? false
+      : await this.usersRepository.isFollowing(viewerId, user.id);
+
+    if (user.isPrivate && !isOwnProfile && !isFollowingAuthor) {
+      return { items: [], nextCursor: null };
+    }
+
+    const beforeMs = decodeUserPostsCursor(cursor);
+    const replies = await this.postsRepository.findRepliesByAuthor(
+      this.prisma,
+      user.id,
+      beforeMs,
+      limit,
+    );
+    const replyIds = replies.map((reply) => reply.id);
+
+    const [likeCounts, likedPostIds, savedPostIds] = await Promise.all([
+      this.likesRepository.getCounts(replyIds),
+      this.likesRepository.findLikedPostIds(this.prisma, viewerId, replyIds),
+      this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, replyIds),
+    ]);
+
+    const items = replies.map((reply) =>
+      PostResponse.from(reply, {
+        likeCount: likeCounts.get(reply.id) ?? 0,
+        isLiked: likedPostIds.has(reply.id),
+        isFollowing: isFollowingAuthor,
+        isSaved: savedPostIds.has(reply.id),
+      }),
+    );
+
+    const hasMore = replies.length === limit;
+    const nextCursor = hasMore
+      ? encodeUserPostsCursor(replies[replies.length - 1].createdAt.getTime())
+      : null;
+
+    return { items, nextCursor };
+  }
+
   async getSavedPosts(
     viewerId: string,
     cursor: string | undefined,
@@ -210,6 +270,47 @@ export class UsersService {
     const hasMore = saved.length === limit;
     const nextCursor = hasMore
       ? encodeUserPostsCursor(saved[saved.length - 1].savedAt.getTime())
+      : null;
+
+    return { items, nextCursor };
+  }
+
+  async getMyLikedPosts(
+    viewerId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<UserPostsResponse> {
+    const beforeMs = decodeUserPostsCursor(cursor);
+    const liked = await this.likesRepository.findPostsLikedByUser(
+      this.prisma,
+      viewerId,
+      beforeMs,
+      limit,
+    );
+    const postIds = liked.map((row) => row.post.id);
+    const authorIds = liked.map((row) => row.post.authorId);
+
+    const [likeCounts, savedPostIds, followedAuthorIds, blockedAuthorIds] = await Promise.all([
+      this.likesRepository.getCounts(postIds),
+      this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, postIds),
+      this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, authorIds),
+      this.postsRepository.findBlockedAuthorIds(this.prisma, viewerId, authorIds),
+    ]);
+
+    const items = liked
+      .filter(({ post }) => !blockedAuthorIds.has(post.authorId))
+      .map(({ post }) =>
+        PostResponse.from(post, {
+          likeCount: likeCounts.get(post.id) ?? 0,
+          isLiked: true,
+          isFollowing: followedAuthorIds.has(post.authorId),
+          isSaved: savedPostIds.has(post.id),
+        }),
+      );
+
+    const hasMore = liked.length === limit;
+    const nextCursor = hasMore
+      ? encodeUserPostsCursor(liked[liked.length - 1].likedAt.getTime())
       : null;
 
     return { items, nextCursor };
