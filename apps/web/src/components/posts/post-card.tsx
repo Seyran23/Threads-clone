@@ -20,7 +20,7 @@ import { useState } from 'react';
 
 import type { Post } from '@threads-clone/shared-types';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,7 @@ import {
 import { followUser, unfollowUser } from '@/lib/api/follows';
 import { likePost, savePost, unlikePost, unsavePost } from '@/lib/api/posts';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
+import { usePresence } from '@/lib/hooks/use-presence';
 import { cn } from '@/lib/utils';
 import {
   removePostFromSavedPostsCache,
@@ -51,6 +52,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
   const isOwnPost = currentUser?.user.id === post.author.id;
+  const isAuthorOnline = usePresence(post.author.id);
   const [copied, setCopied] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
@@ -162,6 +164,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
             <AvatarImage src={post.author.avatarUrl} alt={`${post.author.username}'s avatar`} />
           )}
           <AvatarFallback>{post.author.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+          {isAuthorOnline && <AvatarBadge className="bg-green-500" aria-label="Online" />}
         </Avatar>
       </Link>
 

@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import { PostCard } from '@/components/posts/post-card';
 import { PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ import { followUser, unfollowUser } from '@/lib/api/follows';
 import { getMyLikedPosts, getUserPosts, getUserProfile, getUserReplies } from '@/lib/api/users';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel';
+import { usePresence } from '@/lib/hooks/use-presence';
 import { queryKeys } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
 import { updateAuthorFollowInCaches } from '@/lib/utils/optimistic-post-update';
@@ -47,6 +48,8 @@ export function ProfileView({ username }: ProfileViewProps) {
     queryKey: queryKeys.profile(username),
     queryFn: () => getUserProfile(username),
   });
+
+  const isProfileOnline = usePresence(isOwnProfile ? undefined : profileQuery.data?.id);
 
   const canViewPosts = profileQuery.isSuccess && !!profileQuery.data?.canViewPosts;
 
@@ -211,6 +214,7 @@ export function ProfileView({ username }: ProfileViewProps) {
               <AvatarFallback className="text-lg">
                 {profileQuery.data.username.slice(0, 1).toUpperCase()}
               </AvatarFallback>
+              {isProfileOnline && <AvatarBadge className="bg-green-500" aria-label="Online" />}
             </Avatar>
           </div>
 
