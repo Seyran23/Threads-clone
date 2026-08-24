@@ -188,7 +188,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
                   followMutation.mutate();
                 }}
                 className={cn(
-                  'text-sm font-medium',
+                  '-m-1 p-1 text-sm font-medium',
                   post.isFollowing ? 'text-muted-foreground' : 'text-primary',
                 )}
               >
@@ -199,7 +199,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
             <DropdownMenu>
               <DropdownMenuTrigger
                 onClick={(e) => e.stopPropagation()}
-                className="text-muted-foreground hover:text-foreground"
+                className="-m-1 p-1 text-muted-foreground hover:text-foreground"
                 aria-label="More options"
               >
                 <MoreHorizontal className="size-5" />
@@ -264,10 +264,14 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
               likeMutation.mutate();
             }}
             className={cn(
-              'flex items-center gap-1.5 text-sm transition-colors hover:text-foreground',
+              '-m-1 flex items-center gap-1.5 p-1 text-sm transition-colors hover:text-foreground',
               post.isLiked && 'text-destructive hover:text-destructive',
             )}
-            aria-label={post.isLiked ? 'Unlike' : 'Like'}
+            aria-label={
+              post.isLiked
+                ? `Unlike${post.likeCount > 0 ? `, ${post.likeCount} likes` : ''}`
+                : `Like${post.likeCount > 0 ? `, ${post.likeCount} likes` : ''}`
+            }
           >
             <motion.span
               animate={post.isLiked ? { scale: [1, 1.3, 1] } : { scale: 1 }}
@@ -278,7 +282,7 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
                 className={cn(compact ? 'size-5' : 'size-5.5', post.isLiked && 'fill-current')}
               />
             </motion.span>
-            {post.likeCount > 0 && post.likeCount}
+            {post.likeCount > 0 && <span aria-hidden="true">{post.likeCount}</span>}
           </button>
 
           <button
@@ -287,11 +291,11 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
               e.stopPropagation();
               router.push(`/post/${post.id}`);
             }}
-            className="flex items-center gap-1.5 text-sm transition-colors hover:text-foreground"
-            aria-label="Reply"
+            className="-m-1 flex items-center gap-1.5 p-1 text-sm transition-colors hover:text-foreground"
+            aria-label={`Reply${post.replyCount > 0 ? `, ${post.replyCount} replies` : ''}`}
           >
             <MessageCircle className={compact ? 'size-5' : 'size-5.5'} />
-            {post.replyCount > 0 && post.replyCount}
+            {post.replyCount > 0 && <span aria-hidden="true">{post.replyCount}</span>}
           </button>
 
           <span className="flex items-center gap-1.5 text-sm opacity-40" aria-hidden="true">

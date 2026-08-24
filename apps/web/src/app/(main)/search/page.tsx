@@ -32,6 +32,7 @@ export default function SearchPage() {
 
   return (
     <div className="mx-auto w-full max-w-xl">
+      <h1 className="sr-only">Search</h1>
       <div className="flex items-center gap-3 border-b border-border p-4">
         <Link href="/" aria-label="Back to feed">
           <ArrowLeft className="size-5" />

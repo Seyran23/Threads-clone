@@ -97,6 +97,7 @@ export default function HomePage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <h1 className="sr-only">Home</h1>
         <ThreadsLogo className="text-foreground" />
 
         <div className="flex items-center gap-4">

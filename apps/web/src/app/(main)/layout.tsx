@@ -7,5 +7,5 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const { data } = useCurrentUser();
   useNotificationSocket(!!data);
 
-  return children;
+  return <main>{children}</main>;
 }
