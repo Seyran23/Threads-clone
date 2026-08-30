@@ -94,6 +94,7 @@ describe('PostsService', () => {
       findDepthById: jest.fn(),
       incrementReplyCount: jest.fn(),
       findReplies: jest.fn(),
+      findThread: jest.fn(),
       findFollowedAuthorIds: jest.fn().mockResolvedValue(new Set()),
       isBlockedEitherDirection: jest.fn().mockResolvedValue(false),
       isPrivateAndNotFollowing: jest.fn().mockResolvedValue(false),
@@ -520,6 +521,58 @@ describe('PostsService', () => {
       const result = await postsService.getReplies('user-1', 'parent-1', undefined, 1);
 
       expect(result.nextCursor).not.toBeNull();
+    });
+  });
+
+  describe('getThread', () => {
+    const child = { ...createdPost, id: 'reply-1', parentId: 'root-1', depth: 1 };
+    const grandchild = { ...createdPost, id: 'reply-2', parentId: 'reply-1', depth: 2 };
+
+    beforeEach(() => {
+      postsRepository.findDepthById.mockResolvedValue({ depth: 0, authorId: 'root-author-1' });
+      postsRepository.findThread.mockResolvedValue([child, grandchild] as never);
+    });
+
+    it('throws NotFoundException when the root post does not exist', async () => {
+      postsRepository.findDepthById.mockResolvedValue(null);
+
+      await expect(postsService.getThread('user-1', 'missing')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the viewer and the root author have blocked each other', async () => {
+      postsRepository.isBlockedEitherDirection.mockResolvedValue(true);
+
+      await expect(postsService.getThread('user-1', 'root-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when the root author is private and not followed', async () => {
+      postsRepository.isPrivateAndNotFollowing.mockResolvedValue(true);
+
+      await expect(postsService.getThread('user-1', 'root-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns every descendant across multiple levels, not just direct replies', async () => {
+      const result = await postsService.getThread('user-1', 'root-1');
+
+      expect(result.items.map((item) => item.id)).toEqual(['reply-1', 'reply-2']);
+    });
+
+    it('excludes a reply from a blocked author and its own descendants', async () => {
+      postsRepository.findBlockedAuthorIds.mockResolvedValue(new Set(['user-1']));
+
+      const result = await postsService.getThread('viewer-1', 'root-1');
+
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('returns per-reply like counts and isLiked flags', async () => {
+      likesRepository.getCounts.mockResolvedValue(new Map([['reply-1', 2]]));
+      likesRepository.findLikedPostIds.mockResolvedValue(new Set(['reply-1']));
+
+      const result = await postsService.getThread('user-1', 'root-1');
+
+      expect(result.items[0].likeCount).toBe(2);
+      expect(result.items[0].isLiked).toBe(true);
     });
   });
 

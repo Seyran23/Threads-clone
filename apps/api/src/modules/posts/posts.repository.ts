@@ -58,6 +58,30 @@ export class PostsRepository {
     });
   }
 
+  async findThread(
+    tx: PrismaClientOrTx,
+    rootId: string,
+    maxDepth = 12,
+  ): Promise<PostWithRelations[]> {
+    const all: PostWithRelations[] = [];
+    let parentIds = [rootId];
+
+    for (let level = 0; level < maxDepth && parentIds.length > 0; level++) {
+      const posts = await tx.post.findMany({
+        where: { parentId: { in: parentIds } },
+        orderBy: { createdAt: 'asc' },
+        include: POST_INCLUDE,
+      });
+      if (posts.length === 0) {
+        break;
+      }
+      all.push(...posts);
+      parentIds = posts.map((post) => post.id);
+    }
+
+    return all;
+  }
+
   findByAuthor(
     tx: PrismaClientOrTx,
     authorId: string,

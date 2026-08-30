@@ -25,6 +25,7 @@ import { ReportsRepository } from './reports.repository';
 import { LikeResponse } from './response/like.response';
 import { PostResponse, PostWithRelations } from './response/post.response';
 import { RepliesResponse } from './response/replies.response';
+import { ThreadResponse } from './response/thread.response';
 import { SavedPostsRepository } from './saved-posts.repository';
 import { extractHashtags } from './utils/hashtag.util';
 import { decodeRepliesCursor, encodeRepliesCursor } from './utils/replies-cursor.util';
@@ -250,6 +251,61 @@ export class PostsService {
       : null;
 
     return { items, nextCursor };
+  }
+
+  async getThread(viewerId: string, rootId: string): Promise<ThreadResponse> {
+    const root = await this.postsRepository.findDepthById(this.prisma, rootId);
+    if (!root) {
+      throw new NotFoundException('Post', rootId);
+    }
+
+    const isBlocked = await this.postsRepository.isBlockedEitherDirection(
+      this.prisma,
+      viewerId,
+      root.authorId,
+    );
+    if (isBlocked) {
+      throw new NotFoundException('Post', rootId);
+    }
+
+    const isPrivateAndNotFollowing = await this.postsRepository.isPrivateAndNotFollowing(
+      this.prisma,
+      viewerId,
+      root.authorId,
+    );
+    if (isPrivateAndNotFollowing) {
+      throw new NotFoundException('Post', rootId);
+    }
+
+    const descendants = await this.postsRepository.findThread(this.prisma, rootId);
+    const postIds = descendants.map((post) => post.id);
+    const authorIds = descendants.map((post) => post.authorId);
+
+    const [likeCounts, likedPostIds, followedAuthorIds, savedPostIds, blockedAuthorIds] =
+      await Promise.all([
+        this.likesRepository.getCounts(postIds),
+        this.likesRepository.findLikedPostIds(this.prisma, viewerId, postIds),
+        this.postsRepository.findFollowedAuthorIds(this.prisma, viewerId, authorIds),
+        this.savedPostsRepository.findSavedPostIds(this.prisma, viewerId, postIds),
+        this.postsRepository.findBlockedAuthorIds(this.prisma, viewerId, authorIds),
+      ]);
+
+    const blockedIds = new Set(
+      descendants.filter((post) => blockedAuthorIds.has(post.authorId)).map((post) => post.id),
+    );
+
+    const items = descendants
+      .filter((post) => !blockedAuthorIds.has(post.authorId) && !blockedIds.has(post.parentId!))
+      .map((post) =>
+        PostResponse.from(post, {
+          likeCount: likeCounts.get(post.id) ?? 0,
+          isLiked: likedPostIds.has(post.id),
+          isFollowing: followedAuthorIds.has(post.authorId),
+          isSaved: savedPostIds.has(post.id),
+        }),
+      );
+
+    return { items };
   }
 
   async likePost(userId: string, postId: string): Promise<LikeResponse> {

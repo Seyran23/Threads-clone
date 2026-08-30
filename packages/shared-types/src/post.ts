@@ -28,6 +28,10 @@ export interface RepliesPage {
   nextCursor: string | null;
 }
 
+export interface ThreadPage {
+  items: Post[];
+}
+
 export interface UserPostsPage {
   items: Post[];
   nextCursor: string | null;

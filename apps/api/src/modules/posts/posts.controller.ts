@@ -29,6 +29,7 @@ import { PostsService } from './posts.service';
 import { LikeResponse } from './response/like.response';
 import { PostResponse } from './response/post.response';
 import { RepliesResponse } from './response/replies.response';
+import { ThreadResponse } from './response/thread.response';
 
 @ApiTags('posts')
 @ApiCookieAuth()
@@ -60,6 +61,11 @@ export class PostsController {
     @Query() query: GetRepliesQueryDto,
   ): Promise<RepliesResponse> {
     return this.postsService.getReplies(user.id, id, query.cursor, query.limit);
+  }
+
+  @Get(':id/thread')
+  getThread(@CurrentUser() user: { id: string }, @Param('id') id: string): Promise<ThreadResponse> {
+    return this.postsService.getThread(user.id, id);
   }
 
   @Post(':id/replies')
