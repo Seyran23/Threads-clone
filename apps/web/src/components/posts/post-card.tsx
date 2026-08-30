@@ -33,6 +33,7 @@ import { likePost, savePost, unlikePost, unsavePost } from '@/lib/api/posts';
 import { useCurrentUser } from '@/lib/hooks/use-current-user';
 import { usePresence } from '@/lib/hooks/use-presence';
 import { cn } from '@/lib/utils';
+import { getBlurDataUrl } from '@/lib/utils/blur-data-url';
 import {
   removePostFromSavedPostsCache,
   updateAuthorFollowInCaches,
@@ -236,17 +237,22 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
           <div
             className={cn('grid gap-2', post.media.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}
           >
-            {post.media.map((media) => (
-              <div key={media.id} className="relative aspect-video overflow-hidden rounded-lg">
-                <Image
-                  src={media.thumbnailUrl ?? media.url}
-                  alt=""
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              </div>
-            ))}
+            {post.media.map((media) => {
+              const blurDataUrl = getBlurDataUrl(media.blurHash);
+              return (
+                <div key={media.id} className="relative aspect-video overflow-hidden rounded-lg">
+                  <Image
+                    src={media.thumbnailUrl ?? media.url}
+                    alt=""
+                    fill
+                    unoptimized
+                    className="object-cover"
+                    placeholder={blurDataUrl ? 'blur' : 'empty'}
+                    blurDataURL={blurDataUrl}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 
