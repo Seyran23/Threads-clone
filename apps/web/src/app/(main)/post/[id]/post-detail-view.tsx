@@ -3,12 +3,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useMemo } from 'react';
 
 import { PostCard } from '@/components/posts/post-card';
 import { PostCardSkeleton, PostCardSkeletonList } from '@/components/posts/post-card-skeleton';
 import { PostComposer } from '@/components/posts/post-composer';
-import { getPost, getReplies } from '@/lib/api/posts';
+import { ReplyThread } from '@/components/posts/reply-thread';
+import { getPost, getThread } from '@/lib/api/posts';
 import { queryKeys } from '@/lib/query-keys';
+import { buildReplyTree } from '@/lib/utils/build-reply-tree';
 
 interface PostDetailViewProps {
   postId: string;
@@ -16,10 +19,15 @@ interface PostDetailViewProps {
 
 export function PostDetailView({ postId }: PostDetailViewProps) {
   const postQuery = useQuery({ queryKey: queryKeys.post(postId), queryFn: () => getPost(postId) });
-  const repliesQuery = useQuery({
-    queryKey: queryKeys.replies(postId),
-    queryFn: () => getReplies(postId),
+  const threadQuery = useQuery({
+    queryKey: queryKeys.thread(postId),
+    queryFn: () => getThread(postId),
   });
+
+  const replyTree = useMemo(
+    () => buildReplyTree(threadQuery.data?.items ?? [], postId),
+    [threadQuery.data, postId],
+  );
 
   return (
     <div className="mx-auto w-full max-w-xl pb-20">
@@ -35,27 +43,17 @@ export function PostDetailView({ postId }: PostDetailViewProps) {
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load this post.</p>
       )}
       {postQuery.data && (
-        <PostCard
-          post={postQuery.data}
-          threadLine={repliesQuery.data && repliesQuery.data.items.length > 0 ? 'start' : undefined}
-        />
+        <PostCard post={postQuery.data} threadLine={replyTree.length > 0 ? 'start' : undefined} />
       )}
 
-      {repliesQuery.isLoading && <PostCardSkeletonList count={2} />}
-      {repliesQuery.isError && (
+      {threadQuery.isLoading && <PostCardSkeletonList count={2} />}
+      {threadQuery.isError && (
         <p className="p-4 text-sm text-destructive">Couldn&apos;t load replies.</p>
       )}
-      {repliesQuery.data && repliesQuery.data.items.length === 0 && (
+      {threadQuery.data && replyTree.length === 0 && (
         <p className="p-8 text-center text-sm text-muted-foreground">No replies yet.</p>
       )}
-      {repliesQuery.data?.items.map((reply, index) => (
-        <PostCard
-          key={reply.id}
-          post={reply}
-          compact
-          threadLine={index === repliesQuery.data.items.length - 1 ? 'end' : 'middle'}
-        />
-      ))}
+      <ReplyThread nodes={replyTree} />
 
       {postQuery.data && (
         <div className="fixed inset-x-0 bottom-0 z-10 bg-background">

@@ -3,6 +3,7 @@ export const queryKeys = {
   feed: ['feed'] as const,
   post: (id: string) => ['post', id] as const,
   replies: (parentId: string) => ['replies', parentId] as const,
+  thread: (rootId: string) => ['thread', rootId] as const,
   profile: (username: string) => ['profile', username] as const,
   userPosts: (username: string) => ['userPosts', username] as const,
   userReplies: (username: string) => ['userReplies', username] as const,

@@ -1,4 +1,10 @@
-import type { LikeResult, Post, RepliesPage, ReportReason } from '@threads-clone/shared-types';
+import type {
+  LikeResult,
+  Post,
+  RepliesPage,
+  ReportReason,
+  ThreadPage,
+} from '@threads-clone/shared-types';
 
 import { apiFetch } from './client';
 import type { CreatePostInput, GetRepliesParams } from './posts.types';
@@ -27,6 +33,10 @@ export function getReplies(parentId: string, params: GetRepliesParams = {}): Pro
 
   const queryString = query.toString();
   return apiFetch<RepliesPage>(`/posts/${parentId}/replies${queryString ? `?${queryString}` : ''}`);
+}
+
+export function getThread(rootId: string): Promise<ThreadPage> {
+  return apiFetch<ThreadPage>(`/posts/${rootId}/thread`);
 }
 
 export function likePost(id: string): Promise<LikeResult> {
