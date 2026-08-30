@@ -21,6 +21,7 @@ import { useState } from 'react';
 import type { Post } from '@threads-clone/shared-types';
 
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -180,20 +181,18 @@ export function PostCard({ post, compact = false, threadLine }: PostCardProps) {
           <span className="text-muted-foreground">· {formatRelativeTime(post.createdAt)}</span>
 
           <div className="ml-auto flex items-center gap-3">
-            {!isOwnPost && (
-              <button
+            {!isOwnPost && !post.isFollowing && (
+              <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   followMutation.mutate();
                 }}
-                className={cn(
-                  '-m-1 p-1 text-sm font-medium',
-                  post.isFollowing ? 'text-muted-foreground' : 'text-primary',
-                )}
               >
-                {post.isFollowing ? 'Following' : 'Follow'}
-              </button>
+                Follow
+              </Button>
             )}
 
             <DropdownMenu>
