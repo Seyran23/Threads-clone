@@ -49,6 +49,7 @@ export class FeedService {
     ]);
 
     const items = merged
+      .filter((entry) => postsById.has(entry.postId))
       .filter((entry) => !blockedAuthorIds.has(postsById.get(entry.postId)!.authorId))
       .map((entry) => {
         const post = postsById.get(entry.postId)!;

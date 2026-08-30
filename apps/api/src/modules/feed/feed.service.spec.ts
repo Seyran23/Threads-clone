@@ -75,6 +75,20 @@ describe('FeedService', () => {
     expect(result.items[0].likeCount).toBe(3);
   });
 
+  it('skips a feed entry whose post is missing from Postgres instead of throwing', async () => {
+    const createdAt = new Date('2026-07-08T10:00:00.000Z');
+    feedRepository.getFeedEntries.mockResolvedValue([
+      { postId: 'stale-post', score: createdAt.getTime() },
+      { postId: 'post-1', score: createdAt.getTime() },
+    ]);
+    feedRepository.findManyByIds.mockResolvedValue([makePost('post-1', createdAt)] as never);
+
+    const result = await feedService.getFeed('viewer-1', undefined, 20);
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].id).toBe('post-1');
+  });
+
   it('marks posts liked by the viewer as isLiked', async () => {
     const createdAt = new Date('2026-07-08T10:00:00.000Z');
     feedRepository.getFeedEntries.mockResolvedValue([
